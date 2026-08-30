@@ -23,6 +23,8 @@ export interface WorldMapTileView {
   readonly terrainCode: string;
   readonly biomeCode: string;
   readonly elevation: number;
+  readonly classificationOrigin: 'Automatic' | 'Manual';
+  readonly classificationConfidence: number | null;
 }
 
 export interface WorldMapOverlay {

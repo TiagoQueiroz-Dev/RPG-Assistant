@@ -110,7 +110,9 @@ public sealed class World : AggregateRoot
         IWorldDefinitionCatalog definitions,
         short elevation,
         decimal temperatureCelsius,
-        decimal humidity)
+        decimal humidity,
+        BiomeClassificationOrigin classificationOrigin = BiomeClassificationOrigin.Manual,
+        decimal? classificationConfidence = null)
     {
         EnsureContains(position);
         ArgumentNullException.ThrowIfNull(definitions);
@@ -123,7 +125,9 @@ public sealed class World : AggregateRoot
             biome,
             elevation,
             temperatureCelsius,
-            humidity);
+            humidity,
+            classificationOrigin,
+            classificationConfidence);
     }
 
     private void EnsureContains(Position position)

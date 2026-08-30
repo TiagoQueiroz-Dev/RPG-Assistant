@@ -85,6 +85,40 @@ public sealed class WorldDefinitionCatalogTests
                 humidity: 0.50m));
     }
 
+    [Fact]
+    public void Manual_biome_confirmation_is_preserved_from_automatic_reprocessing()
+    {
+        var world = World.Create("Aster", 4, 4);
+        var tile = world.CreateTile(
+            world.PositionAt(0, 0),
+            "forest",
+            DefaultWorldDefinitions.Catalog,
+            elevation: 0,
+            temperatureCelsius: 20m,
+            humidity: 0.50m,
+            classificationOrigin: BiomeClassificationOrigin.Automatic,
+            classificationConfidence: 0.80m);
+
+        Assert.True(tile.ApplyAutomaticClassification(
+            "desert",
+            DefaultWorldDefinitions.Catalog,
+            0.75m));
+        tile.SetEnvironment(
+            "snow",
+            DefaultWorldDefinitions.Catalog,
+            tile.Elevation,
+            tile.TemperatureCelsius,
+            tile.Humidity);
+
+        Assert.False(tile.ApplyAutomaticClassification(
+            "forest",
+            DefaultWorldDefinitions.Catalog,
+            0.99m));
+        Assert.Equal("snow", tile.BiomeCode);
+        Assert.Equal(BiomeClassificationOrigin.Manual, tile.BiomeClassificationOrigin);
+        Assert.Null(tile.BiomeClassificationConfidence);
+    }
+
     private sealed class CrystalCavernDefinitions : IWorldDefinitionModule
     {
         public IEnumerable<TerrainDefinition> Terrains =>

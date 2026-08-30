@@ -78,6 +78,39 @@ app.MapPost("/api/worlds/import", ImportWorldAsync)
     .DisableAntiforgery()
     .WithName("ImportWorldApi");
 
+app.MapPost(
+    "/api/worlds/{worldId:guid}/classification/reprocess",
+    async (Guid worldId, IWorldClassificationService service, CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await service.ReprocessAsync(worldId, cancellationToken));
+        }
+        catch (KeyNotFoundException)
+        {
+            return Results.NotFound();
+        }
+    });
+
+app.MapPut(
+    "/api/worlds/{worldId:guid}/tiles/{x:int}/{y:int}/biome",
+    async (Guid worldId, int x, int y, ManualBiomeRequest body, IWorldClassificationService service, CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            await service.ConfirmManualAsync(worldId, x, y, body.BiomeCode, cancellationToken);
+            return Results.NoContent();
+        }
+        catch (KeyNotFoundException)
+        {
+            return Results.NotFound();
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    });
+
 var summaries = new[]
 {
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
@@ -149,6 +182,8 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
+
+record ManualBiomeRequest(string BiomeCode);
 
 public partial class Program
 {

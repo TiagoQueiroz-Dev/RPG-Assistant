@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import {
   afterNextRender,
   ChangeDetectionStrategy,
@@ -46,6 +47,7 @@ const BIOME_COLORS: Readonly<Record<string, string>> = {
 
 @Component({
   selector: 'app-world-map',
+  imports: [DecimalPipe],
   templateUrl: './world-map.html',
   styleUrl: './world-map.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -53,6 +55,7 @@ const BIOME_COLORS: Readonly<Record<string, string>> = {
 export class WorldMap {
   readonly worldId = input('demo');
   readonly overlays = input<readonly WorldMapOverlay[]>([]);
+  readonly refreshToken = input(0);
   readonly tileSelected = output<WorldMapTileView>();
 
   private readonly mapService = inject(WorldMapService);
@@ -85,9 +88,10 @@ export class WorldMap {
 
     effect(() => {
       const worldId = this.worldId();
+      this.refreshToken();
       this.overlays();
 
-      if (this.ready && worldId !== this.renderedWorldId) {
+      if (this.ready) {
         this.loadMap(worldId);
       }
 

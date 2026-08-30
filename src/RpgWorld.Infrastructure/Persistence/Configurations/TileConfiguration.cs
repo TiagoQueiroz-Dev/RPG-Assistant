@@ -33,6 +33,14 @@ internal sealed class TileConfiguration : IEntityTypeConfiguration<Tile>
         builder.Property(tile => tile.Humidity)
             .HasColumnName("humidity")
             .HasPrecision(4, 3);
+        builder.Property(tile => tile.BiomeClassificationOrigin)
+            .HasColumnName("biome_classification_origin")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(BiomeClassificationOrigin.Manual);
+        builder.Property(tile => tile.BiomeClassificationConfidence)
+            .HasColumnName("biome_classification_confidence")
+            .HasPrecision(4, 3);
         builder.Property(tile => tile.ResourceDepositId)
             .HasColumnName("resource_deposit_id");
         builder.Property(tile => tile.StructureId)
@@ -56,4 +64,3 @@ internal sealed class TileConfiguration : IEntityTypeConfiguration<Tile>
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
-

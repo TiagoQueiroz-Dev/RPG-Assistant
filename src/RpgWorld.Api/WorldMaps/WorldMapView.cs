@@ -22,4 +22,6 @@ public sealed record WorldMapTileView(
     int Y,
     string TerrainCode,
     string BiomeCode,
-    short Elevation);
+    short Elevation,
+    string ClassificationOrigin = "Automatic",
+    decimal? ClassificationConfidence = null);

@@ -38,6 +38,8 @@ public static class DependencyInjection
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
         services.AddScoped<IWorldMapRepository, EfWorldMapRepository>();
         services.AddScoped<IWorldImportService, WorldImportService>();
+        services.AddSingleton<IMapRegionClassifier, ColorMapRegionClassifier>();
+        services.AddScoped<IWorldClassificationService, WorldClassificationService>();
 
         AddCaching(services, configuration);
 

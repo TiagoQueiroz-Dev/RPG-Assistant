@@ -36,7 +36,23 @@
     </button>
   </form>
 
-  <app-world-map class="map-region" [worldId]="world().worldId" />
+  <app-world-map class="map-region" [worldId]="world().worldId"
+    [refreshToken]="classificationRevision()" (tileSelected)="selectedMapTile.set($event)" />
+
+  <div class="classification-review">
+    @if (selectedMapTile(); as tile) {
+      <form (submit)="confirmBiome($event)">
+        <span>Revisando X {{ tile.x }} · Y {{ tile.y }}</span>
+        <select name="biome" [value]="tile.biomeCode" aria-label="Bioma confirmado">
+          @for (biome of ['ocean', 'river', 'forest', 'mountain', 'desert', 'grassland', 'snow', 'swamp', 'volcanic']; track biome) {
+            <option [value]="biome">{{ biome }}</option>
+          }
+        </select>
+        <button type="submit">Confirmar manualmente</button>
+      </form>
+    } @else { <span>Selecione um tile para revisar sua classificação.</span> }
+    <button type="button" (click)="reprocessClassification()">Reprocessar automáticos</button>
+  </div>
 
   <div class="metric-grid" aria-label="Métricas administrativas">
     <article>

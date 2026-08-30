@@ -43,7 +43,9 @@ public sealed class PersistedWorldMapProvider(RpgWorldDbContext dbContext)
                     tile.Y,
                     tile.TerrainCode,
                     tile.BiomeCode,
-                    tile.Elevation))
+                    tile.Elevation,
+                    tile.BiomeClassificationOrigin.ToString(),
+                    tile.BiomeClassificationConfidence))
                 .ToArray();
 
             return new WorldMapChunkView(

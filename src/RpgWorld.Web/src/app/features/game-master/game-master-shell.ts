@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { WorldMap } from '../map/world-map';
 import { WorldAdminView } from './models/world-admin-view';
 import { WorldImportService } from './world-import.service';
+import { WorldMapTileView } from '../map/models/world-map-view';
 
 @Component({
   selector: 'app-game-master-shell',
@@ -15,6 +16,8 @@ export class GameMasterShell {
 
   protected readonly importState = signal<'idle' | 'uploading' | 'completed' | 'error'>('idle');
   protected readonly importMessage = signal('PNG, JPG ou WEBP · até 10 MB');
+  protected readonly selectedMapTile = signal<WorldMapTileView | null>(null);
+  protected readonly classificationRevision = signal(0);
 
   protected readonly world = signal<WorldAdminView>({
     worldId: 'demo',
@@ -63,5 +66,21 @@ export class GameMasterShell {
         this.importMessage.set('A importação falhou. Verifique o arquivo e tente novamente.');
       },
     });
+  }
+
+  protected confirmBiome(event: SubmitEvent): void {
+    event.preventDefault();
+    const tile = this.selectedMapTile();
+    const biome = new FormData(event.currentTarget as HTMLFormElement).get('biome')?.toString();
+    if (!tile || !biome) return;
+    this.importer.confirmBiome(this.world().worldId, tile, biome).subscribe(() => {
+      this.selectedMapTile.set(null);
+      this.classificationRevision.update(value => value + 1);
+    });
+  }
+
+  protected reprocessClassification(): void {
+    this.importer.reprocess(this.world().worldId).subscribe(() =>
+      this.classificationRevision.update(value => value + 1));
   }
 }

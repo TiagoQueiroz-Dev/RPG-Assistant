@@ -37,6 +37,11 @@
       @if (selectedTile(); as tile) {
         <strong>{{ tile.biomeCode }}</strong>
         <span>X {{ tile.x }} · Y {{ tile.y }} · {{ tile.elevation }} m</span>
+        <span>{{ tile.classificationOrigin }}
+          @if (tile.classificationConfidence !== null) {
+            · {{ tile.classificationConfidence * 100 | number: '1.0-0' }}%
+          }
+        </span>
       } @else if (hoveredPosition(); as position) {
         <strong>Coordenada</strong>
         <span>X {{ position.x }} · Y {{ position.y }}</span>

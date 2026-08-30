@@ -156,7 +156,11 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         await using var context = new RpgWorldDbContext(options);
         await context.Database.MigrateAsync();
         var bytes = CreateImage(format);
-        var importer = new WorldImportService(context, DefaultWorldDefinitions.Catalog, TimeProvider.System);
+        var importer = new WorldImportService(
+            context,
+            DefaultWorldDefinitions.Catalog,
+            new ColorMapRegionClassifier(),
+            TimeProvider.System);
 
         var result = await importer.ImportAsync(new WorldImportRequest(
             $"Imported {format}",
@@ -185,7 +189,11 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         await using var context = new RpgWorldDbContext(options);
         await context.Database.MigrateAsync();
         var worldsBefore = await context.Worlds.CountAsync();
-        var importer = new WorldImportService(context, DefaultWorldDefinitions.Catalog, TimeProvider.System);
+        var importer = new WorldImportService(
+            context,
+            DefaultWorldDefinitions.Catalog,
+            new ColorMapRegionClassifier(),
+            TimeProvider.System);
 
         await Assert.ThrowsAsync<WorldImportValidationException>(() =>
             importer.ImportAsync(new WorldImportRequest(
@@ -195,6 +203,52 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
                 GridResolution: 32)));
 
         Assert.Equal(worldsBefore, await context.Worlds.CountAsync());
+    }
+
+    [Fact]
+    public async Task Reprocessing_preserves_manual_biome_confirmations()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var classifier = new ColorMapRegionClassifier();
+        var importer = new WorldImportService(
+            context,
+            DefaultWorldDefinitions.Catalog,
+            classifier,
+            TimeProvider.System);
+        var imported = await importer.ImportAsync(new WorldImportRequest(
+            "Reviewable world",
+            "map.png",
+            CreateImage("png"),
+            GridResolution: 32));
+        var service = new WorldClassificationService(
+            context,
+            DefaultWorldDefinitions.Catalog,
+            classifier);
+
+        await service.ConfirmManualAsync(imported.WorldId, 0, 0, "snow");
+        var result = await service.ReprocessAsync(imported.WorldId);
+        context.ChangeTracker.Clear();
+
+        var tiles = await context.Tiles
+            .AsNoTracking()
+            .Where(tile => tile.WorldId == imported.WorldId)
+            .OrderBy(tile => tile.Y)
+            .ThenBy(tile => tile.X)
+            .ToArrayAsync();
+        Assert.Equal(3, result.AutomaticallyClassified);
+        Assert.Equal(1, result.PreservedManual);
+        Assert.Equal("snow", tiles[0].BiomeCode);
+        Assert.Equal(BiomeClassificationOrigin.Manual, tiles[0].BiomeClassificationOrigin);
+        Assert.All(tiles[1..], tile =>
+        {
+            Assert.Equal("forest", tile.BiomeCode);
+            Assert.Equal(BiomeClassificationOrigin.Automatic, tile.BiomeClassificationOrigin);
+            Assert.NotNull(tile.BiomeClassificationConfidence);
+        });
     }
 
     private static byte[] CreateImage(string format)

@@ -17,7 +17,9 @@ public sealed class Tile
         BiomeDefinition biome,
         short elevation,
         decimal temperatureCelsius,
-        decimal humidity)
+        decimal humidity,
+        BiomeClassificationOrigin classificationOrigin,
+        decimal? classificationConfidence)
     {
         Id = id;
         WorldId = position.WorldId;
@@ -26,6 +28,7 @@ public sealed class Tile
         TerrainCode = terrain.Code;
         BiomeCode = biome.Code;
         Elevation = elevation;
+        SetClassification(classificationOrigin, classificationConfidence);
         SetClimate(temperatureCelsius, humidity);
     }
 
@@ -47,6 +50,10 @@ public sealed class Tile
 
     public decimal Humidity { get; private set; }
 
+    public BiomeClassificationOrigin BiomeClassificationOrigin { get; private set; }
+
+    public decimal? BiomeClassificationConfidence { get; private set; }
+
     public Guid? ResourceDepositId { get; private set; }
 
     public Guid? StructureId { get; private set; }
@@ -61,7 +68,9 @@ public sealed class Tile
         BiomeDefinition biome,
         short elevation,
         decimal temperatureCelsius,
-        decimal humidity) =>
+        decimal humidity,
+        BiomeClassificationOrigin classificationOrigin = BiomeClassificationOrigin.Manual,
+        decimal? classificationConfidence = null) =>
         new(
             Guid.CreateVersion7(),
             position,
@@ -69,7 +78,9 @@ public sealed class Tile
             biome,
             elevation,
             temperatureCelsius,
-            humidity);
+            humidity,
+            classificationOrigin,
+            classificationConfidence);
 
     public void SetEnvironment(
         string biomeCode,
@@ -83,8 +94,28 @@ public sealed class Tile
         var terrain = definitions.ResolveTerrain(biome.TerrainCode);
         TerrainCode = terrain.Code;
         BiomeCode = biome.Code;
+        SetClassification(BiomeClassificationOrigin.Manual, null);
         Elevation = elevation;
         SetClimate(temperatureCelsius, humidity);
+    }
+
+    public bool ApplyAutomaticClassification(
+        string biomeCode,
+        IWorldDefinitionCatalog definitions,
+        decimal confidence)
+    {
+        if (BiomeClassificationOrigin == BiomeClassificationOrigin.Manual)
+        {
+            return false;
+        }
+
+        ArgumentNullException.ThrowIfNull(definitions);
+        var biome = definitions.ResolveBiome(biomeCode);
+        var terrain = definitions.ResolveTerrain(biome.TerrainCode);
+        TerrainCode = terrain.Code;
+        BiomeCode = biome.Code;
+        SetClassification(BiomeClassificationOrigin.Automatic, confidence);
+        return true;
     }
 
     public void AssignResource(Guid? resourceDepositId) =>
@@ -127,6 +158,24 @@ public sealed class Tile
 
         TemperatureCelsius = temperatureCelsius;
         Humidity = humidity;
+    }
+
+    private void SetClassification(
+        BiomeClassificationOrigin origin,
+        decimal? confidence)
+    {
+        if (origin == BiomeClassificationOrigin.Automatic &&
+            (confidence is null or < 0 or > 1))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(confidence),
+                "Automatic classification confidence must be between 0 and 1.");
+        }
+
+        BiomeClassificationOrigin = origin;
+        BiomeClassificationConfidence = origin == BiomeClassificationOrigin.Manual
+            ? null
+            : confidence;
     }
 
     private static Guid? OptionalId(Guid? value, string parameterName) =>

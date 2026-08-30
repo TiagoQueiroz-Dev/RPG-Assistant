@@ -13,6 +13,7 @@ namespace RpgWorld.Infrastructure.Worlds.Importing;
 public sealed class WorldImportService(
     RpgWorldDbContext dbContext,
     IWorldDefinitionCatalog definitions,
+    IMapRegionClassifier classifier,
     TimeProvider timeProvider) : IWorldImportService
 {
     public const int MaximumFileSize = 10 * 1024 * 1024;
@@ -163,7 +164,8 @@ public sealed class WorldImportService(
                 var pixelX = Math.Min(image.Width - 1, x * gridResolution + gridResolution / 2);
                 var pixelY = Math.Min(image.Height - 1, y * gridResolution + gridResolution / 2);
                 var pixel = image[pixelX, pixelY];
-                var biomeCode = ClassifyBiome(pixel);
+                var classification = classifier.Classify(new MapColorSample(pixel.R, pixel.G, pixel.B));
+                var biomeCode = classification.BiomeCode;
                 var luminance = (pixel.R * 299 + pixel.G * 587 + pixel.B * 114) / 1000;
                 var elevation = (short)Math.Clamp((luminance - 96) * 2, short.MinValue, short.MaxValue);
 
@@ -173,30 +175,13 @@ public sealed class WorldImportService(
                     definitions,
                     elevation,
                     temperatureCelsius: BiomeTemperature(biomeCode),
-                    humidity: BiomeHumidity(biomeCode)));
+                    humidity: BiomeHumidity(biomeCode),
+                    classificationOrigin: BiomeClassificationOrigin.Automatic,
+                    classificationConfidence: classification.Confidence));
             }
         }
 
         return tiles;
-    }
-
-    private static string ClassifyBiome(Rgba32 pixel)
-    {
-        var maximum = Math.Max(pixel.R, Math.Max(pixel.G, pixel.B));
-        var minimum = Math.Min(pixel.R, Math.Min(pixel.G, pixel.B));
-        var saturation = maximum - minimum;
-        var luminance = (pixel.R * 299 + pixel.G * 587 + pixel.B * 114) / 1000;
-
-        if (luminance > 220 && saturation < 30) return "snow";
-        if (pixel.B > pixel.R * 1.18 && pixel.B > pixel.G * 1.08) return "ocean";
-        if (pixel.B > pixel.R * 1.05 && pixel.G > pixel.R * 1.12) return "river";
-        if (pixel.R > pixel.G * 1.45 && pixel.R > pixel.B * 1.30) return "volcanic";
-        if (luminance < 50) return "mountain";
-        if (pixel.R > 145 && pixel.G > 115 && pixel.B < 135) return "desert";
-        if (pixel.G > pixel.R * 1.10 && luminance < 105) return "swamp";
-        if (pixel.G > pixel.R * 1.15 && pixel.G > pixel.B * 1.10) return "forest";
-        if (saturation < 28) return "mountain";
-        return "grassland";
     }
 
     private static decimal BiomeTemperature(string biomeCode) => biomeCode switch
