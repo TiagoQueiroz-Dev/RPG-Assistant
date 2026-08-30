@@ -3,9 +3,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RpgWorld.Application.Caching;
 using RpgWorld.Application.Events;
+using RpgWorld.Application.Worlds;
 using RpgWorld.Infrastructure.Caching;
 using RpgWorld.Infrastructure.Events;
 using RpgWorld.Infrastructure.Persistence;
+using RpgWorld.Infrastructure.Persistence.Repositories;
 
 namespace RpgWorld.Infrastructure;
 
@@ -32,6 +34,7 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString, PostgresOptions.Configure);
         });
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+        services.AddScoped<IWorldMapRepository, EfWorldMapRepository>();
 
         AddCaching(services, configuration);
 

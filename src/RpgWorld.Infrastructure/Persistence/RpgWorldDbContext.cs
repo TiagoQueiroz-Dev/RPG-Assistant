@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using RpgWorld.Application.Events;
 using RpgWorld.Domain;
 using RpgWorld.Domain.Events;
+using RpgWorld.Domain.Worlds;
 
 namespace RpgWorld.Infrastructure.Persistence;
 
@@ -22,6 +23,12 @@ public sealed class RpgWorldDbContext : DbContext
 
     public DbSet<PersistenceCheckpoint> PersistenceCheckpoints =>
         Set<PersistenceCheckpoint>();
+
+    public DbSet<World> Worlds => Set<World>();
+
+    public DbSet<Chunk> Chunks => Set<Chunk>();
+
+    public DbSet<Tile> Tiles => Set<Tile>();
 
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 
