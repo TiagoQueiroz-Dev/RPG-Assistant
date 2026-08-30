@@ -319,6 +319,44 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
                 new MapPaintRequest(MapBrushKind.Forest, 0, 0, Size: 17)));
     }
 
+    [Fact]
+    public async Task World_clock_survives_context_restart_with_current_instant()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        var initial = new DateTimeOffset(2030, 5, 10, 9, 0, 0, TimeSpan.Zero);
+        var world = World.Create("Clockwork", 8, 8);
+
+        await using (var firstContext = new RpgWorldDbContext(options))
+        {
+            await firstContext.Database.MigrateAsync();
+            firstContext.Worlds.Add(world);
+            firstContext.WorldClocks.Add(WorldClock.Create(
+                world.Id,
+                initial,
+                initial,
+                tickDuration: TimeSpan.FromHours(1),
+                realTimeMultiplier: 3m));
+            await firstContext.SaveChangesAsync();
+        }
+
+        await using (var secondContext = new RpgWorldDbContext(options))
+        {
+            var repository = new EfWorldClockRepository(secondContext);
+            var clock = await repository.GetAsync(world.Id);
+            Assert.NotNull(clock);
+            clock.AdvanceTicks(2);
+            await repository.SaveChangesAsync();
+        }
+
+        await using var restartedContext = new RpgWorldDbContext(options);
+        var restored = await restartedContext.WorldClocks.AsNoTracking().SingleAsync(clock => clock.WorldId == world.Id);
+        Assert.Equal(initial.AddHours(2), restored.CurrentInstant);
+        Assert.Equal(TimeSpan.FromHours(1), restored.TickDuration);
+        Assert.Equal(3m, restored.RealTimeMultiplier);
+    }
+
     private static byte[] CreateImage(string format)
     {
         using var image = new Image<Rgba32>(64, 64, new Rgba32(30, 150, 60));

@@ -9,6 +9,7 @@ using RpgWorld.Infrastructure.Worlds.Importing;
 using RpgWorld.Modules.Default.Worlds;
 using RpgWorld.Simulation;
 using Microsoft.AspNetCore.Http.Features;
+using RpgWorld.Simulation.Time;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -146,6 +147,41 @@ app.MapPost(
             ? Results.Ok(result)
             : Results.Conflict(new { error = "There is no map edit to redo." }));
 
+app.MapGet(
+    "/api/worlds/{worldId:guid}/clock",
+    async (Guid worldId, IWorldClockService service, CancellationToken cancellationToken) =>
+    {
+        try { return Results.Ok(await service.GetAsync(worldId, cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/clock/ticks/{tickCount:int}",
+    async (Guid worldId, int tickCount, IWorldClockService service, CancellationToken cancellationToken) =>
+    {
+        try { return Results.Ok(await service.AdvanceTicksAsync(worldId, tickCount, cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (ArgumentOutOfRangeException exception)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPut(
+    "/api/worlds/{worldId:guid}/clock/configuration",
+    async (Guid worldId, WorldClockConfigurationRequest body, IWorldClockService service, CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await service.ConfigureAsync(
+                worldId,
+                TimeSpan.FromSeconds(body.TickDurationSeconds),
+                body.RealTimeMultiplier,
+                cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (ArgumentOutOfRangeException exception)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
 var summaries = new[]
 {
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
@@ -221,6 +257,8 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 record ManualBiomeRequest(string BiomeCode);
 
 record MapPaintApiRequest(string Brush, int CenterX, int CenterY, int Size);
+
+record WorldClockConfigurationRequest(double TickDurationSeconds, decimal RealTimeMultiplier);
 
 public partial class Program
 {

@@ -67,6 +67,8 @@ public sealed class WorldImportService(
                 request.GridResolution,
                 request.ImageData.ToArray(),
                 timeProvider.GetUtcNow());
+            var now = timeProvider.GetUtcNow();
+            var worldClock = WorldClock.Create(world.Id, now, now);
 
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -76,6 +78,7 @@ public sealed class WorldImportService(
                 dbContext.Chunks.AddRange(chunks);
                 dbContext.Tiles.AddRange(tiles);
                 dbContext.WorldMapSourceImages.Add(sourceImage);
+                dbContext.WorldClocks.Add(worldClock);
                 await dbContext.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }

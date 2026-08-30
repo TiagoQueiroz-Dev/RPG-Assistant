@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddSingleton<IMapRegionClassifier, ColorMapRegionClassifier>();
         services.AddScoped<IWorldClassificationService, WorldClassificationService>();
         services.AddScoped<IMapEditingService, MapEditingService>();
+        services.AddScoped<IWorldClockRepository, EfWorldClockRepository>();
 
         AddCaching(services, configuration);
 

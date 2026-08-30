@@ -34,6 +34,8 @@ public sealed class RpgWorldDbContext : DbContext
 
     public DbSet<MapEditOperation> MapEditOperations => Set<MapEditOperation>();
 
+    public DbSet<WorldClock> WorldClocks => Set<WorldClock>();
+
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
