@@ -1,4 +1,5 @@
 using RpgWorld.Api.Realtime;
+using RpgWorld.Api.WorldMaps;
 using RpgWorld.Application.Realtime;
 using RpgWorld.Infrastructure;
 
@@ -33,6 +34,7 @@ builder.Services.AddSingleton<
     IRealtimeSubscriptionAuthorizer,
     ClaimBasedRealtimeSubscriptionAuthorizer>();
 builder.Services.AddSingleton<IWorldUpdatePublisher, SignalRWorldUpdatePublisher>();
+builder.Services.AddSingleton<DemoWorldMapProvider>();
 
 var app = builder.Build();
 
@@ -42,6 +44,10 @@ app.MapHub<WorldHub>("/hubs/world", options =>
 {
     options.AllowStatefulReconnects = true;
 });
+
+app.MapGet("/api/worlds/demo/map", (DemoWorldMapProvider provider) =>
+        Results.Ok(provider.GetMap()))
+    .WithName("GetDemoWorldMap");
 
 var summaries = new[]
 {

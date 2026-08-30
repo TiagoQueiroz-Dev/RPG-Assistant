@@ -1,15 +1,17 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { WorldMap } from '../map/world-map';
 import { WorldAdminView } from './models/world-admin-view';
 
 @Component({
   selector: 'app-game-master-shell',
+  imports: [WorldMap],
   templateUrl: './game-master-shell.html',
   styleUrl: './game-master-shell.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class GameMasterShell {
   protected readonly world = signal<WorldAdminView>({
-    worldId: 'demo-world',
+    worldId: 'demo',
     name: 'As Marcas de Aster',
     currentTime: '17º dia da Lua Rubra · 19:40',
     simulationStatus: 'running',

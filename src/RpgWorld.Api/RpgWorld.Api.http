@@ -4,3 +4,8 @@ GET {{RpgWorld.Api_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+GET {{RpgWorld.Api_HostAddress}}/api/worlds/demo/map
+Accept: application/json
+
+###

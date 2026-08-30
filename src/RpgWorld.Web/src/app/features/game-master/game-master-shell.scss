@@ -4,6 +4,10 @@
   --accent: var(--gold);
 }
 
+.map-region {
+  grid-column: 1 / -1;
+}
+
 .world-clock {
   align-self: end;
   min-width: min(100%, 330px);

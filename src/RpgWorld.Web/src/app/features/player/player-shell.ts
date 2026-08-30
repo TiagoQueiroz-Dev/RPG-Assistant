@@ -1,15 +1,17 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { WorldMap } from '../map/world-map';
 import { PlayerWorldView } from './models/player-world-view';
 
 @Component({
   selector: 'app-player-shell',
+  imports: [WorldMap],
   templateUrl: './player-shell.html',
   styleUrl: './player-shell.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PlayerShell {
   protected readonly view = signal<PlayerWorldView>({
-    worldId: 'demo-world',
+    worldId: 'demo',
     worldName: 'As Marcas de Aster',
     characterName: 'Liora Venn',
     localTime: 'Anoitecer · 19:40',

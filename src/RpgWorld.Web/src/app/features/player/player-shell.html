@@ -11,6 +11,8 @@
     <small>{{ view().worldName }}</small>
   </aside>
 
+  <app-world-map class="map-region" [worldId]="view().worldId" />
+
   <div class="player-grid">
     <article class="panel nearby-panel">
       <header>

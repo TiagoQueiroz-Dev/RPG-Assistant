@@ -4,6 +4,10 @@
   --accent: var(--teal);
 }
 
+.map-region {
+  grid-column: 1 / -1;
+}
+
 .local-conditions {
   align-self: end;
   padding: 1.4rem;

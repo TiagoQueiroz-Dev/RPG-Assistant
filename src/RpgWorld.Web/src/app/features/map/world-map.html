@@ -1,0 +1,55 @@
+<section class="map-card" aria-labelledby="map-title">
+  <header class="map-toolbar">
+    <div>
+      <span class="eyebrow">Cartografia viva</span>
+      <h2 id="map-title">{{ map()?.name ?? 'Mapa do mundo' }}</h2>
+    </div>
+    <div class="map-actions" aria-label="Controles do mapa">
+      <button type="button" aria-label="Diminuir zoom" (click)="zoomBy(1 / 1.12)">−</button>
+      <output aria-label="Nível de zoom">{{ zoomPercent() }}%</output>
+      <button type="button" aria-label="Aumentar zoom" (click)="zoomBy(1.12)">+</button>
+      <button type="button" class="fit-button" (click)="resetView()">Enquadrar</button>
+    </div>
+  </header>
+
+  <div class="map-viewport">
+    <canvas
+      #canvas
+      tabindex="0"
+      aria-label="Mapa interativo. Arraste para mover, use a roda para ampliar e clique para identificar um tile."
+      (pointerdown)="onPointerDown($event)"
+      (pointermove)="onPointerMove($event)"
+      (pointerup)="onPointerUp($event)"
+      (pointercancel)="onPointerUp($event)"
+      (pointerleave)="onPointerLeave()"
+      (wheel)="onWheel($event)"
+      (keydown)="onKeyDown($event)"
+    ></canvas>
+
+    @if (loading()) {
+      <div class="map-state" role="status">Traçando rotas e regiões…</div>
+    }
+    @if (error()) {
+      <div class="map-state error" role="alert">{{ error() }}</div>
+    }
+
+    <div class="coordinate-readout" aria-live="polite">
+      @if (selectedTile(); as tile) {
+        <strong>{{ tile.biomeCode }}</strong>
+        <span>X {{ tile.x }} · Y {{ tile.y }} · {{ tile.elevation }} m</span>
+      } @else if (hoveredPosition(); as position) {
+        <strong>Coordenada</strong>
+        <span>X {{ position.x }} · Y {{ position.y }}</span>
+      } @else {
+        <strong>Explore o mapa</strong>
+        <span>Arraste, amplie e selecione um tile</span>
+      }
+    </div>
+  </div>
+
+  <footer class="map-legend" aria-label="Legenda de biomas">
+    @for (item of legend; track item.code) {
+      <span><i [style.background]="item.color"></i>{{ item.code }}</span>
+    }
+  </footer>
+</section>

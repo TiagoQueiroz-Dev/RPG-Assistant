@@ -13,6 +13,8 @@
     <small><i></i> Simulação em execução</small>
   </aside>
 
+  <app-world-map class="map-region" [worldId]="world().worldId" />
+
   <div class="metric-grid" aria-label="Métricas administrativas">
     <article>
       <span>Atores simulados</span><strong>{{ world().totalActors }}</strong
