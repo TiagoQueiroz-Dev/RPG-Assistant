@@ -23,6 +23,7 @@ public sealed class Chunk
         OriginY = originY;
         Width = width;
         Height = height;
+        SimulationLevel = SimulationLevel.Abstract;
     }
 
     public Guid Id { get; private set; }
@@ -41,6 +42,16 @@ public sealed class Chunk
 
     public int Height { get; private set; }
 
+    public SimulationLevel SimulationLevel { get; private set; }
+
+    public int AggregatePopulation { get; private set; }
+
+    public decimal AggregateEconomicOutput { get; private set; }
+
+    public decimal AggregateMilitaryStrength { get; private set; }
+
+    public decimal AggregateProductionOutput { get; private set; }
+
     public ChunkCoordinate Coordinate => new(CoordinateX, CoordinateY);
 
     public bool Contains(Position position) =>
@@ -49,6 +60,26 @@ public sealed class Chunk
         position.X < OriginX + Width &&
         position.Y >= OriginY &&
         position.Y < OriginY + Height;
+
+    public bool AllowsIndividualActions => SimulationLevel == SimulationLevel.Detailed;
+
+    public void TransitionSimulationLevel(
+        SimulationLevel targetLevel,
+        RegionAggregateState aggregateState)
+    {
+        ArgumentNullException.ThrowIfNull(aggregateState);
+        SimulationLevel = targetLevel;
+        AggregatePopulation = aggregateState.Population;
+        AggregateEconomicOutput = aggregateState.EconomicOutput;
+        AggregateMilitaryStrength = aggregateState.MilitaryStrength;
+        AggregateProductionOutput = aggregateState.ProductionOutput;
+    }
+
+    public RegionAggregateState GetAggregateState() => new(
+        AggregatePopulation,
+        AggregateEconomicOutput,
+        AggregateMilitaryStrength,
+        AggregateProductionOutput);
 
     internal static Chunk Create(
         Guid worldId,
@@ -66,4 +97,3 @@ public sealed class Chunk
             width,
             height);
 }
-

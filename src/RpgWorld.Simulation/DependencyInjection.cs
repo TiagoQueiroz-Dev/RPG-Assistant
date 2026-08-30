@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using RpgWorld.Simulation.Chunks;
 using RpgWorld.Simulation.Time;
 using RpgWorld.Simulation.Engine;
+using RpgWorld.Simulation.Regions;
 
 namespace RpgWorld.Simulation;
 
@@ -11,7 +12,8 @@ public static class DependencyInjection
     public static IServiceCollection AddSimulation(
         this IServiceCollection services,
         ChunkActivationOptions? chunkActivationOptions = null,
-        SimulationEngineOptions? simulationEngineOptions = null)
+        SimulationEngineOptions? simulationEngineOptions = null,
+        SimulationLevelOptions? simulationLevelOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -19,9 +21,12 @@ public static class DependencyInjection
         services.AddSingleton(chunkActivationOptions ?? new ChunkActivationOptions());
         services.AddSingleton(simulationEngineOptions ?? new SimulationEngineOptions());
         services.AddSingleton<ISimulationScheduler, SimulationScheduler>();
+        services.AddSingleton(simulationLevelOptions ?? new SimulationLevelOptions());
+        services.AddSingleton<SimulationLevelResolver>();
         services.AddScoped<IChunkActivationService, ChunkActivationService>();
         services.AddScoped<IWorldClockService, WorldClockService>();
         services.AddScoped<IWorldSimulationControlService, WorldSimulationControlService>();
+        services.AddScoped<IRegionSimulationService, RegionSimulationService>();
         services.AddHostedService<SimulationEngine>();
         return services;
     }

@@ -5,6 +5,7 @@ using RpgWorld.Domain.Events;
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Simulation.Chunks;
+using RpgWorld.Simulation.Regions;
 
 namespace RpgWorld.Simulation.Tests.Chunks;
 
@@ -22,12 +23,14 @@ public sealed class ChunkActivationServiceTests
         var cache = new RecordingCacheService();
         var dispatcher = new RecordingEventDispatcher();
         var clock = new ManualTimeProvider(new DateTimeOffset(2026, 8, 30, 12, 0, 0, TimeSpan.Zero));
+        var regionSimulation = new RecordingRegionSimulationService();
         using var service = new ChunkActivationService(
             repository,
             cache,
             dispatcher,
             new ChunkActivationOptions(playerRadius: 1),
-            clock);
+            clock,
+            regionSimulation);
 
         await service.SynchronizeAsync(
             world,
@@ -41,6 +44,8 @@ public sealed class ChunkActivationServiceTests
         Assert.Equal(
             10,
             dispatcher.Events.OfType<ChunkActivatedEvent>().Count());
+        Assert.Equal(1, regionSimulation.SyncCalls);
+        Assert.Equal(world.PositionAt(40, 40), Assert.Single(regionSimulation.PlayerPositions));
     }
 
     [Fact]
@@ -228,5 +233,22 @@ public sealed class ChunkActivationServiceTests
         public override DateTimeOffset GetUtcNow() => utcNow;
 
         public void Advance(TimeSpan duration) => utcNow += duration;
+    }
+
+    private sealed class RecordingRegionSimulationService : IRegionSimulationService
+    {
+        public int SyncCalls { get; private set; }
+        public IReadOnlyList<Position> PlayerPositions { get; private set; } = [];
+
+        public Task<IReadOnlyList<RegionSimulationTransition>> SynchronizeAsync(
+            World world,
+            IEnumerable<Position> playerPositions,
+            IEnumerable<ChunkCoordinate>? activeRegions = null,
+            CancellationToken cancellationToken = default)
+        {
+            SyncCalls++;
+            PlayerPositions = playerPositions.ToArray();
+            return Task.FromResult<IReadOnlyList<RegionSimulationTransition>>([]);
+        }
     }
 }

@@ -136,6 +136,29 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Region_simulation_level_and_aggregate_survive_reload()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var world = World.Create("Aggregated", 32, 32);
+        var chunk = world.CreateChunk(new ChunkCoordinate(0, 0));
+        var aggregate = new RegionAggregateState(250, 91.25m, 44m, 73.5m);
+        chunk.TransitionSimulationLevel(SimulationLevel.Regional, aggregate);
+        context.AddRange(world, chunk);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var stored = await context.Chunks.SingleAsync(candidate => candidate.Id == chunk.Id);
+
+        Assert.Equal(SimulationLevel.Regional, stored.SimulationLevel);
+        Assert.Equal(aggregate, stored.GetAggregateState());
+        Assert.False(stored.AllowsIndividualActions);
+    }
+
+    [Fact]
     public async Task Chunk_changes_are_persisted_and_released_before_reloading()
     {
         var options = new DbContextOptionsBuilder<RpgWorldDbContext>()

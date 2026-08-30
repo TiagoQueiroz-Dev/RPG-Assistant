@@ -21,8 +21,25 @@ internal sealed class ChunkConfiguration : IEntityTypeConfiguration<Chunk>
         builder.Property(chunk => chunk.OriginY).HasColumnName("origin_y");
         builder.Property(chunk => chunk.Width).HasColumnName("width");
         builder.Property(chunk => chunk.Height).HasColumnName("height");
+        builder.Property(chunk => chunk.SimulationLevel)
+            .HasColumnName("simulation_level")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(SimulationLevel.Abstract);
+        builder.Property(chunk => chunk.AggregatePopulation)
+            .HasColumnName("aggregate_population");
+        builder.Property(chunk => chunk.AggregateEconomicOutput)
+            .HasColumnName("aggregate_economic_output")
+            .HasPrecision(18, 2);
+        builder.Property(chunk => chunk.AggregateMilitaryStrength)
+            .HasColumnName("aggregate_military_strength")
+            .HasPrecision(18, 2);
+        builder.Property(chunk => chunk.AggregateProductionOutput)
+            .HasColumnName("aggregate_production_output")
+            .HasPrecision(18, 2);
 
         builder.Ignore(chunk => chunk.Coordinate);
+        builder.Ignore(chunk => chunk.AllowsIndividualActions);
 
         builder.HasIndex(chunk => new
             {
@@ -39,4 +56,3 @@ internal sealed class ChunkConfiguration : IEntityTypeConfiguration<Chunk>
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
-

@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<IMapEditingService, MapEditingService>();
         services.AddScoped<IWorldClockRepository, EfWorldClockRepository>();
         services.AddScoped<IWorldSimulationRepository, EfWorldSimulationRepository>();
+        services.AddScoped<IRegionSimulationRepository, EfRegionSimulationRepository>();
 
         AddCaching(services, configuration);
 

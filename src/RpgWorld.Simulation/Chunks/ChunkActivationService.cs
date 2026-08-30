@@ -4,6 +4,7 @@ using RpgWorld.Application.Events;
 using RpgWorld.Application.Worlds;
 using RpgWorld.Domain.Events;
 using RpgWorld.Domain.Worlds;
+using RpgWorld.Simulation.Regions;
 
 namespace RpgWorld.Simulation.Chunks;
 
@@ -12,7 +13,8 @@ public sealed class ChunkActivationService(
     ICacheService cache,
     IDomainEventDispatcher eventDispatcher,
     ChunkActivationOptions options,
-    TimeProvider timeProvider) : IChunkActivationService, IDisposable
+    TimeProvider timeProvider,
+    IRegionSimulationService? regionSimulationService = null) : IChunkActivationService, IDisposable
 {
     private readonly ConcurrentDictionary<ChunkKey, ActiveChunk> _activeChunks = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -40,10 +42,20 @@ public sealed class ChunkActivationService(
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(playerPositions);
 
+        var players = playerPositions.ToArray();
+        var relevant = (relevantRegions ?? []).ToArray();
         var requiredCoordinates = ResolveRequiredCoordinates(
             world,
-            playerPositions,
-            relevantRegions ?? []);
+            players,
+            relevant);
+        if (regionSimulationService is not null)
+        {
+            await regionSimulationService.SynchronizeAsync(
+                world,
+                players,
+                relevant,
+                cancellationToken);
+        }
         var now = timeProvider.GetUtcNow();
         var events = new List<IDomainEvent>();
 
