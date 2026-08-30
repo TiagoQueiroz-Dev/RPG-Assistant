@@ -4,10 +4,12 @@ using Microsoft.Extensions.DependencyInjection;
 using RpgWorld.Application.Caching;
 using RpgWorld.Application.Events;
 using RpgWorld.Application.Worlds;
+using RpgWorld.Application.Worlds.Importing;
 using RpgWorld.Infrastructure.Caching;
 using RpgWorld.Infrastructure.Events;
 using RpgWorld.Infrastructure.Persistence;
 using RpgWorld.Infrastructure.Persistence.Repositories;
+using RpgWorld.Infrastructure.Worlds.Importing;
 
 namespace RpgWorld.Infrastructure;
 
@@ -35,6 +37,7 @@ public static class DependencyInjection
         });
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
         services.AddScoped<IWorldMapRepository, EfWorldMapRepository>();
+        services.AddScoped<IWorldImportService, WorldImportService>();
 
         AddCaching(services, configuration);
 

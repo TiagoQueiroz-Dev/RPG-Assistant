@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\RpgWorld.Infrastructure\RpgWorld.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\RpgWorld.Modules.Default\RpgWorld.Modules.Default.csproj" />
   </ItemGroup>
 
 </Project>

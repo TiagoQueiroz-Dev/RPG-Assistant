@@ -4,6 +4,15 @@ using RpgWorld.Domain.Worlds;
 using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Infrastructure.Persistence;
 using RpgWorld.Infrastructure.Persistence.Repositories;
+using RpgWorld.Infrastructure.Worlds.Importing;
+using RpgWorld.Application.Worlds.Importing;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Webp;
+using SixLabors.ImageSharp.PixelFormats;
+using RpgWorld.Modules.Default.Worlds;
 using Testcontainers.PostgreSql;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
@@ -133,5 +142,73 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Empty(context.ChangeTracker.Entries<Tile>());
         var reloaded = await repository.GetTileAsync(world.PositionAt(0, 0));
         Assert.Equal(structureId, reloaded?.StructureId);
+    }
+
+    [Theory]
+    [InlineData("png")]
+    [InlineData("jpeg")]
+    [InlineData("webp")]
+    public async Task Imports_supported_image_as_atomic_world_grid(string format)
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var bytes = CreateImage(format);
+        var importer = new WorldImportService(context, DefaultWorldDefinitions.Catalog, TimeProvider.System);
+
+        var result = await importer.ImportAsync(new WorldImportRequest(
+            $"Imported {format}",
+            $"map.{format}",
+            bytes,
+            GridResolution: 32));
+
+        Assert.Equal("completed", result.Status);
+        Assert.Equal(2, result.Width);
+        Assert.Equal(2, result.Height);
+        Assert.Equal(1, result.ChunkCount);
+        Assert.Equal(4, result.TileCount);
+        Assert.Equal(4, await context.Tiles.CountAsync(tile => tile.WorldId == result.WorldId));
+        var source = await context.WorldMapSourceImages.SingleAsync(image => image.WorldId == result.WorldId);
+        Assert.Equal(bytes, source.Data);
+        Assert.Equal(64, source.PixelWidth);
+        Assert.Equal(32, source.GridResolution);
+    }
+
+    [Fact]
+    public async Task Corrupted_import_does_not_leave_partial_world()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var worldsBefore = await context.Worlds.CountAsync();
+        var importer = new WorldImportService(context, DefaultWorldDefinitions.Catalog, TimeProvider.System);
+
+        await Assert.ThrowsAsync<WorldImportValidationException>(() =>
+            importer.ImportAsync(new WorldImportRequest(
+                "Broken",
+                "broken.png",
+                [1, 2, 3, 4, 5],
+                GridResolution: 32)));
+
+        Assert.Equal(worldsBefore, await context.Worlds.CountAsync());
+    }
+
+    private static byte[] CreateImage(string format)
+    {
+        using var image = new Image<Rgba32>(64, 64, new Rgba32(30, 150, 60));
+        using var stream = new MemoryStream();
+        IImageEncoder encoder = format switch
+        {
+            "png" => new PngEncoder(),
+            "jpeg" => new JpegEncoder(),
+            "webp" => new WebpEncoder(),
+            _ => throw new ArgumentOutOfRangeException(nameof(format))
+        };
+        image.Save(stream, encoder);
+        return stream.ToArray();
     }
 }

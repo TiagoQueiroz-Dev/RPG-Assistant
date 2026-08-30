@@ -8,6 +8,62 @@
   grid-column: 1 / -1;
 }
 
+.import-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(130px, 0.55fr)) minmax(190px, 0.8fr) auto;
+  align-items: end;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.import-panel strong,
+.import-panel small,
+.import-panel label span {
+  display: block;
+}
+
+.import-panel small,
+.import-panel label span {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.import-panel label span {
+  margin-bottom: 0.35rem;
+}
+
+.import-panel input,
+.import-panel button {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: rgba(10, 15, 16, 0.72);
+  font: inherit;
+}
+
+.import-panel input {
+  padding: 0 0.65rem;
+}
+
+.import-panel input[type='file'] {
+  padding: 0.42rem;
+  font-size: 0.7rem;
+}
+
+.import-panel button {
+  padding: 0 1rem;
+  color: var(--gold);
+}
+
+.import-panel button:disabled {
+  opacity: 0.55;
+}
+
 .world-clock {
   align-self: end;
   min-width: min(100%, 330px);
@@ -103,6 +159,10 @@
 }
 
 @media (max-width: 800px) {
+  .import-panel {
+    grid-template-columns: 1fr;
+  }
+
   .admin-grid {
     grid-template-columns: 1fr;
   }

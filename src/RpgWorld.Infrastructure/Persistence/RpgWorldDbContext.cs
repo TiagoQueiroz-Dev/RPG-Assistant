@@ -30,6 +30,8 @@ public sealed class RpgWorldDbContext : DbContext
 
     public DbSet<Tile> Tiles => Set<Tile>();
 
+    public DbSet<WorldMapSourceImage> WorldMapSourceImages => Set<WorldMapSourceImage>();
+
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)

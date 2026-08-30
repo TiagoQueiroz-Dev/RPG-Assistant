@@ -1,11 +1,17 @@
 using RpgWorld.Api.Realtime;
 using RpgWorld.Api.WorldMaps;
 using RpgWorld.Application.Realtime;
+using RpgWorld.Application.Worlds.Importing;
+using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Infrastructure;
+using RpgWorld.Infrastructure.Worlds.Importing;
+using RpgWorld.Modules.Default.Worlds;
 using RpgWorld.Simulation;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddSingleton<IWorldDefinitionCatalog>(DefaultWorldDefinitions.Catalog);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSimulation();
 var frontendOrigins = builder.Configuration
@@ -37,6 +43,11 @@ builder.Services.AddSingleton<
     ClaimBasedRealtimeSubscriptionAuthorizer>();
 builder.Services.AddSingleton<IWorldUpdatePublisher, SignalRWorldUpdatePublisher>();
 builder.Services.AddSingleton<DemoWorldMapProvider>();
+builder.Services.AddScoped<PersistedWorldMapProvider>();
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = WorldImportService.MaximumFileSize + (128 * 1024);
+});
 
 var app = builder.Build();
 
@@ -50,6 +61,22 @@ app.MapHub<WorldHub>("/hubs/world", options =>
 app.MapGet("/api/worlds/demo/map", (DemoWorldMapProvider provider) =>
         Results.Ok(provider.GetMap()))
     .WithName("GetDemoWorldMap");
+
+app.MapGet(
+        "/api/worlds/{worldId:guid}/map",
+        async (Guid worldId, PersistedWorldMapProvider provider, CancellationToken cancellationToken) =>
+        {
+            var map = await provider.GetMapAsync(worldId, cancellationToken);
+            return map is null ? Results.NotFound() : Results.Ok(map);
+        })
+    .WithName("GetPersistedWorldMap");
+
+app.MapPost("/worlds/import", ImportWorldAsync)
+    .DisableAntiforgery()
+    .WithName("ImportWorld");
+app.MapPost("/api/worlds/import", ImportWorldAsync)
+    .DisableAntiforgery()
+    .WithName("ImportWorldApi");
 
 var summaries = new[]
 {
@@ -70,6 +97,53 @@ app.MapGet("/weatherforecast", () =>
 });
 
 app.Run();
+
+static async Task<IResult> ImportWorldAsync(
+    HttpRequest request,
+    IWorldImportService importer,
+    CancellationToken cancellationToken)
+{
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest(new { error = "A multipart form with an image file is required." });
+    }
+
+    try
+    {
+        var form = await request.ReadFormAsync(cancellationToken);
+        var file = form.Files.GetFile("file");
+
+        if (file is null)
+        {
+            return Results.BadRequest(new { error = "The 'file' field is required." });
+        }
+
+        if (file.Length is <= 0 or > WorldImportService.MaximumFileSize)
+        {
+            return Results.BadRequest(new { error = "Image size must be between 1 byte and 10 MB." });
+        }
+
+        var name = form["name"].ToString();
+        var gridResolution = int.TryParse(form["gridResolution"], out var parsedGrid)
+            ? parsedGrid
+            : 32;
+        await using var stream = new MemoryStream((int)file.Length);
+        await file.CopyToAsync(stream, cancellationToken);
+        var result = await importer.ImportAsync(
+            new WorldImportRequest(name, file.FileName, stream.ToArray(), gridResolution),
+            cancellationToken);
+
+        return Results.Created($"/api/worlds/{result.WorldId}/map", result);
+    }
+    catch (WorldImportValidationException exception)
+    {
+        return Results.BadRequest(new { error = exception.Message });
+    }
+    catch (InvalidDataException exception)
+    {
+        return Results.BadRequest(new { error = exception.Message });
+    }
+}
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {

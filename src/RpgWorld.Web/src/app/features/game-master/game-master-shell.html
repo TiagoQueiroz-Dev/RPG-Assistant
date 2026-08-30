@@ -13,6 +13,29 @@
     <small><i></i> Simulação em execução</small>
   </aside>
 
+  <form class="import-panel" (submit)="importMap($event)">
+    <div>
+      <span class="eyebrow">Trazer sua cartografia</span>
+      <strong>Importar mapa</strong>
+      <small>{{ importMessage() }}</small>
+    </div>
+    <label>
+      <span>Nome do mundo</span>
+      <input name="name" type="text" maxlength="200" required placeholder="Ex.: Terras de Aster" />
+    </label>
+    <label>
+      <span>Pixels por tile</span>
+      <input name="gridResolution" type="number" min="4" max="512" value="32" required />
+    </label>
+    <label class="file-input">
+      <span>Imagem do mapa</span>
+      <input name="file" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" required />
+    </label>
+    <button type="submit" [disabled]="importState() === 'uploading'">
+      {{ importState() === 'uploading' ? 'Importando…' : 'Criar mundo' }}
+    </button>
+  </form>
+
   <app-world-map class="map-region" [worldId]="world().worldId" />
 
   <div class="metric-grid" aria-label="Métricas administrativas">

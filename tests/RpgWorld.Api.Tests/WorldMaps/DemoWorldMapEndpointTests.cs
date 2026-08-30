@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -34,6 +35,21 @@ public sealed class DemoWorldMapEndpointTests
         Assert.Equal(9, biomes.Count);
         Assert.Contains("ocean", biomes);
         Assert.Contains("volcanic", biomes);
+    }
+
+    [Fact]
+    public async Task Import_endpoint_rejects_invalid_image_without_server_error()
+    {
+        using var factory = new MapWebApplicationFactory();
+        using var client = factory.CreateClient();
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent("Invalid map"), "name");
+        content.Add(new StringContent("32"), "gridResolution");
+        content.Add(new ByteArrayContent([1, 2, 3, 4]), "file", "map.png");
+
+        var response = await client.PostAsync("/worlds/import", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     private sealed class MapWebApplicationFactory : WebApplicationFactory<Program>
