@@ -55,6 +55,16 @@ public sealed class WorldClock
         return elapsed;
     }
 
+    public void AdvanceBy(TimeSpan duration)
+    {
+        if (duration <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(duration), "Duration must be positive.");
+        }
+
+        CurrentInstant = CurrentInstant.Add(duration);
+    }
+
     public TimeSpan Synchronize(DateTimeOffset observedAtUtc)
     {
         var observedUtc = observedAtUtc.ToUniversalTime();
@@ -71,6 +81,19 @@ public sealed class WorldClock
         CurrentInstant = CurrentInstant.Add(worldElapsed);
         LastSynchronizedAtUtc = observedUtc;
         return worldElapsed;
+    }
+
+    public void Rebase(DateTimeOffset observedAtUtc)
+    {
+        var observedUtc = observedAtUtc.ToUniversalTime();
+        if (observedUtc < LastSynchronizedAtUtc)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(observedAtUtc),
+                "Real time cannot move backwards.");
+        }
+
+        LastSynchronizedAtUtc = observedUtc;
     }
 
     public TimeSpan ConvertRealDuration(TimeSpan realDuration)

@@ -15,4 +15,6 @@ public interface ISimulationScheduler
         bool succeeded);
 
     IReadOnlyList<SimulationSystemDiagnostic> GetDiagnostics(Guid? worldId = null);
+
+    void AdvanceWorld(Guid worldId, TimeSpan duration);
 }

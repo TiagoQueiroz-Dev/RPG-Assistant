@@ -136,13 +136,13 @@ public sealed class SimulationEngineTests
     {
         var worldId = Guid.NewGuid();
         var calls = new List<string>();
-        var logger = new RecordingLogger<SimulationEngine>();
+        var logger = new RecordingLogger<SimulationSystemRunner>();
         await using var provider = CreateProvider(
             new FakeWorldSimulationRepository([worldId]),
             new RecordingClockService(),
             new ThrowingSystem(),
             new RecordingSystem("healthy", order: 20, calls));
-        var engine = CreateEngine(provider, logger);
+        var engine = CreateEngine(provider, runnerLogger: logger);
 
         await engine.RunCycleAsync();
 
@@ -171,6 +171,20 @@ public sealed class SimulationEngineTests
         Assert.True(blockingSystem.CancellationObserved);
     }
 
+    [Fact]
+    public async Task Engine_rechecks_world_state_after_gate_and_does_not_tick_paused_world()
+    {
+        var worldId = Guid.NewGuid();
+        var repository = new FakeWorldSimulationRepository([worldId]);
+        repository.Pause();
+        var clock = new RecordingClockService();
+        await using var provider = CreateProvider(repository, clock);
+
+        await CreateEngine(provider).RunCycleAsync();
+
+        Assert.Empty(clock.TickedWorldIds);
+    }
+
     private static ServiceProvider CreateProvider(
         IWorldSimulationRepository repository,
         IWorldClockService clock,
@@ -191,6 +205,7 @@ public sealed class SimulationEngineTests
         };
         services.AddSingleton(options);
         services.AddSingleton<ISimulationScheduler, SimulationScheduler>();
+        services.AddSingleton<IWorldCommandGate, WorldCommandGate>();
 
         return services.BuildServiceProvider(validateScopes: true);
     }
@@ -198,17 +213,32 @@ public sealed class SimulationEngineTests
     private static SimulationEngine CreateEngine(
         ServiceProvider provider,
         ILogger<SimulationEngine>? logger = null,
-        TimeProvider? timeProvider = null) =>
-        new(
-            provider.GetRequiredService<IServiceScopeFactory>(),
-            provider.GetRequiredService<SimulationEngineOptions>(),
-            timeProvider ?? TimeProvider.System,
+        TimeProvider? timeProvider = null,
+        ILogger<SimulationSystemRunner>? runnerLogger = null)
+    {
+        var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
+        var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
+        var runner = new SimulationSystemRunner(
+            scopeFactory,
+            effectiveTimeProvider,
             provider.GetRequiredService<ISimulationScheduler>(),
+            runnerLogger ?? new RecordingLogger<SimulationSystemRunner>());
+        return new SimulationEngine(
+            scopeFactory,
+            provider.GetRequiredService<SimulationEngineOptions>(),
+            effectiveTimeProvider,
+            provider.GetRequiredService<IWorldCommandGate>(),
+            runner,
             logger ?? new RecordingLogger<SimulationEngine>());
+    }
 
     private sealed class FakeWorldSimulationRepository(IReadOnlyList<Guid> runningWorldIds)
         : IWorldSimulationRepository
     {
+        private readonly World _world = World.Create("Running test world", 1, 1);
+
+        public void Pause() => _world.PauseSimulation();
+
         public Task<IReadOnlyList<Guid>> ListRunningWorldIdsAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult(runningWorldIds);
@@ -216,7 +246,10 @@ public sealed class SimulationEngineTests
         public Task<World?> GetAsync(
             Guid worldId,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult<World?>(null);
+            Task.FromResult<World?>(
+                runningWorldIds.Contains(worldId)
+                    ? _world
+                    : null);
 
         public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
@@ -242,7 +275,21 @@ public sealed class SimulationEngineTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult(Snapshot(worldId));
 
+        public Task<WorldClockSnapshot> AdvanceByAsync(
+            Guid worldId,
+            TimeSpan duration,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Snapshot(worldId));
+
         public Task<WorldClockSnapshot> SynchronizeAsync(
+            Guid worldId,
+            CancellationToken cancellationToken = default)
+        {
+            _tickedWorldIds.Add(worldId);
+            return Task.FromResult(Snapshot(worldId));
+        }
+
+        public Task<WorldClockSnapshot> RebaseAsync(
             Guid worldId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(Snapshot(worldId));

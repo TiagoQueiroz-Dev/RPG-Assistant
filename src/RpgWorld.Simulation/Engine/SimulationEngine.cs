@@ -10,7 +10,8 @@ public sealed class SimulationEngine(
     IServiceScopeFactory scopeFactory,
     SimulationEngineOptions options,
     TimeProvider timeProvider,
-    ISimulationScheduler scheduler,
+    IWorldCommandGate commandGate,
+    ISimulationSystemRunner systemRunner,
     ILogger<SimulationEngine> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -57,11 +58,6 @@ public sealed class SimulationEngine(
             .GetRequiredService<IWorldSimulationRepository>();
         var clockService = scope.ServiceProvider
             .GetRequiredService<IWorldClockService>();
-        var systems = scope.ServiceProvider
-            .GetServices<ISimulationSystem>()
-            .OrderBy(system => system.Order)
-            .ThenBy(system => system.Name, StringComparer.Ordinal)
-            .ToArray();
         var worldIds = await repository.ListRunningWorldIdsAsync(cancellationToken);
 
         foreach (var worldId in worldIds)
@@ -70,47 +66,13 @@ public sealed class SimulationEngine(
 
             try
             {
-                var clock = await clockService.AdvanceTicksAsync(
-                    worldId,
-                    cancellationToken: cancellationToken);
-                var context = new SimulationTickContext(worldId, clock);
-
-                foreach (var system in systems)
+                await commandGate.ExecuteAsync(worldId, async token =>
                 {
-                    var observedAt = timeProvider.GetUtcNow();
-                    if (!scheduler.TryBegin(worldId, system, observedAt, out var execution))
-                    {
-                        continue;
-                    }
-
-                    var startedTimestamp = timeProvider.GetTimestamp();
-                    var succeeded = false;
-                    try
-                    {
-                        await system.ExecuteAsync(context, cancellationToken);
-                        succeeded = true;
-                    }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-                    catch (Exception exception)
-                    {
-                        logger.LogError(
-                            exception,
-                            "Simulation system {SystemName} failed for world {WorldId}; remaining systems will continue.",
-                            system.Name,
-                            worldId);
-                    }
-                    finally
-                    {
-                        scheduler.Complete(
-                            execution!,
-                            timeProvider.GetUtcNow(),
-                            timeProvider.GetElapsedTime(startedTimestamp),
-                            succeeded);
-                    }
-                }
+                    var currentWorld = await repository.GetAsync(worldId, token);
+                    if (currentWorld?.IsSimulationRunning != true) return;
+                    var clock = await clockService.SynchronizeAsync(worldId, token);
+                    await systemRunner.RunAsync(new SimulationTickContext(worldId, clock), token);
+                }, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

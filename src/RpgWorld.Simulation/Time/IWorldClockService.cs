@@ -9,7 +9,14 @@ public interface IWorldClockService
         int tickCount = 1,
         CancellationToken cancellationToken = default);
 
+    Task<WorldClockSnapshot> AdvanceByAsync(
+        Guid worldId,
+        TimeSpan duration,
+        CancellationToken cancellationToken = default);
+
     Task<WorldClockSnapshot> SynchronizeAsync(Guid worldId, CancellationToken cancellationToken = default);
+
+    Task<WorldClockSnapshot> RebaseAsync(Guid worldId, CancellationToken cancellationToken = default);
 
     Task<WorldClockSnapshot> ConfigureAsync(
         Guid worldId,

@@ -23,12 +23,33 @@ public sealed class WorldClockService(
         return Snapshot(clock);
     }
 
+    public async Task<WorldClockSnapshot> AdvanceByAsync(
+        Guid worldId,
+        TimeSpan duration,
+        CancellationToken cancellationToken = default)
+    {
+        var clock = await GetOrCreateAsync(worldId, cancellationToken);
+        clock.AdvanceBy(duration);
+        await repository.SaveChangesAsync(cancellationToken);
+        return Snapshot(clock);
+    }
+
     public async Task<WorldClockSnapshot> SynchronizeAsync(
         Guid worldId,
         CancellationToken cancellationToken = default)
     {
         var clock = await GetOrCreateAsync(worldId, cancellationToken);
         clock.Synchronize(timeProvider.GetUtcNow());
+        await repository.SaveChangesAsync(cancellationToken);
+        return Snapshot(clock);
+    }
+
+    public async Task<WorldClockSnapshot> RebaseAsync(
+        Guid worldId,
+        CancellationToken cancellationToken = default)
+    {
+        var clock = await GetOrCreateAsync(worldId, cancellationToken);
+        clock.Rebase(timeProvider.GetUtcNow());
         await repository.SaveChangesAsync(cancellationToken);
         return Snapshot(clock);
     }

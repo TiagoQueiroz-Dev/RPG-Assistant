@@ -5,6 +5,17 @@ namespace RpgWorld.Domain.Tests.Worlds;
 public sealed class WorldClockTests
 {
     [Fact]
+    public void Advances_by_an_exact_manual_duration()
+    {
+        var initial = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var clock = WorldClock.Create(Guid.NewGuid(), initial, initial);
+
+        clock.AdvanceBy(TimeSpan.FromDays(3.5));
+
+        Assert.Equal(initial.AddDays(3.5), clock.CurrentInstant);
+    }
+
+    [Fact]
     public void Tick_advances_exactly_the_configured_duration()
     {
         var initial = new DateTimeOffset(2026, 1, 1, 8, 0, 0, TimeSpan.Zero);
@@ -50,5 +61,18 @@ public sealed class WorldClockTests
         Assert.Equal(TimeSpan.FromMinutes(2), elapsed);
         Assert.Equal(observed.AddMinutes(2), clock.CurrentInstant);
         Assert.Throws<ArgumentOutOfRangeException>(() => clock.Synchronize(observed));
+    }
+
+    [Fact]
+    public void Rebase_discards_paused_real_time_without_advancing_world_time()
+    {
+        var observed = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var clock = WorldClock.Create(Guid.NewGuid(), observed, observed, realTimeMultiplier: 3m);
+
+        clock.Rebase(observed.AddHours(8));
+        var elapsed = clock.Synchronize(observed.AddHours(8).AddMinutes(2));
+
+        Assert.Equal(TimeSpan.FromMinutes(6), elapsed);
+        Assert.Equal(observed.AddMinutes(6), clock.CurrentInstant);
     }
 }

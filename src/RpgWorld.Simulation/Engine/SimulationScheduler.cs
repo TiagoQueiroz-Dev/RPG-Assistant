@@ -5,6 +5,7 @@ public sealed class SimulationScheduler : ISimulationScheduler
     private readonly Lock _lock = new();
     private readonly Dictionary<ScheduleKey, ScheduleState> _states = [];
     private readonly IReadOnlyDictionary<string, TimeSpan> _overrides;
+    private readonly Dictionary<Guid, TimeSpan> _worldOffsets = [];
 
     public SimulationScheduler(SimulationEngineOptions options)
     {
@@ -28,6 +29,7 @@ public sealed class SimulationScheduler : ISimulationScheduler
 
         lock (_lock)
         {
+            if (_worldOffsets.TryGetValue(worldId, out var offset)) observedUtc = observedUtc.Add(offset);
             if (!_states.TryGetValue(key, out var state))
             {
                 state = new ScheduleState(frequency, observedUtc);
@@ -55,6 +57,17 @@ public sealed class SimulationScheduler : ISimulationScheduler
                 observedUtc,
                 frequency);
             return true;
+        }
+    }
+
+    public void AdvanceWorld(Guid worldId, TimeSpan duration)
+    {
+        if (worldId == Guid.Empty) throw new ArgumentException("World identifier is required.", nameof(worldId));
+        if (duration <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(duration));
+        lock (_lock)
+        {
+            _worldOffsets.TryGetValue(worldId, out var current);
+            _worldOffsets[worldId] = current.Add(duration);
         }
     }
 

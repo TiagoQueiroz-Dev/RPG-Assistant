@@ -21,10 +21,13 @@ public static class DependencyInjection
         services.AddSingleton(chunkActivationOptions ?? new ChunkActivationOptions());
         services.AddSingleton(simulationEngineOptions ?? new SimulationEngineOptions());
         services.AddSingleton<ISimulationScheduler, SimulationScheduler>();
+        services.AddSingleton<IWorldCommandGate, WorldCommandGate>();
+        services.AddSingleton<ISimulationSystemRunner, SimulationSystemRunner>();
         services.AddSingleton(simulationLevelOptions ?? new SimulationLevelOptions());
         services.AddSingleton<SimulationLevelResolver>();
         services.AddScoped<IChunkActivationService, ChunkActivationService>();
         services.AddScoped<IWorldClockService, WorldClockService>();
+        services.AddScoped<IWorldTimeCommandService, WorldTimeCommandService>();
         services.AddScoped<IWorldSimulationControlService, WorldSimulationControlService>();
         services.AddScoped<IRegionSimulationService, RegionSimulationService>();
         services.AddHostedService<SimulationEngine>();

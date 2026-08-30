@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http.Features;
 using RpgWorld.Simulation.Time;
 using RpgWorld.Simulation.Engine;
 using System.Globalization;
+using RpgWorld.Api.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -143,16 +144,18 @@ app.MapGet(
 
 app.MapPost(
     "/api/worlds/{worldId:guid}/simulation/start",
-    async (Guid worldId, IWorldSimulationControlService service, CancellationToken cancellationToken) =>
+    async (HttpContext httpContext, Guid worldId, IWorldTimeCommandService service, CancellationToken cancellationToken) =>
     {
-        try { return Results.Ok(await service.StartAsync(worldId, cancellationToken)); }
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try { return Results.Ok(await service.ResumeAsync(worldId, cancellationToken)); }
         catch (KeyNotFoundException) { return Results.NotFound(); }
     });
 
 app.MapPost(
     "/api/worlds/{worldId:guid}/simulation/pause",
-    async (Guid worldId, IWorldSimulationControlService service, CancellationToken cancellationToken) =>
+    async (HttpContext httpContext, Guid worldId, IWorldTimeCommandService service, CancellationToken cancellationToken) =>
     {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
         try { return Results.Ok(await service.PauseAsync(worldId, cancellationToken)); }
         catch (KeyNotFoundException) { return Results.NotFound(); }
     });
@@ -201,18 +204,23 @@ app.MapGet(
 
 app.MapPost(
     "/api/worlds/{worldId:guid}/clock/ticks/{tickCount:int}",
-    async (Guid worldId, int tickCount, IWorldClockService service, CancellationToken cancellationToken) =>
+    async (HttpContext httpContext, Guid worldId, int tickCount, IWorldTimeCommandService service, CancellationToken cancellationToken) =>
     {
-        try { return Results.Ok(await service.AdvanceTicksAsync(worldId, tickCount, cancellationToken)); }
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            return Results.Ok(await service.AdvanceTicksAsync(worldId, tickCount, cancellationToken));
+        }
         catch (KeyNotFoundException) { return Results.NotFound(); }
-        catch (ArgumentOutOfRangeException exception)
+        catch (Exception exception) when (exception is ArgumentOutOfRangeException or OverflowException)
         { return Results.BadRequest(new { error = exception.Message }); }
     });
 
 app.MapPut(
     "/api/worlds/{worldId:guid}/clock/configuration",
-    async (Guid worldId, WorldClockConfigurationRequest body, IWorldClockService service, CancellationToken cancellationToken) =>
+    async (HttpContext httpContext, Guid worldId, WorldClockConfigurationRequest body, IWorldTimeCommandService service, CancellationToken cancellationToken) =>
     {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
         try
         {
             return Results.Ok(await service.ConfigureAsync(
@@ -223,6 +231,45 @@ app.MapPut(
         }
         catch (KeyNotFoundException) { return Results.NotFound(); }
         catch (ArgumentOutOfRangeException exception)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/time/pause",
+    async (HttpContext httpContext, Guid worldId, IWorldTimeCommandService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try { return Results.Ok(await service.PauseAsync(worldId, cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/time/resume",
+    async (HttpContext httpContext, Guid worldId, IWorldTimeCommandService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try { return Results.Ok(await service.ResumeAsync(worldId, cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+    });
+
+app.MapPut(
+    "/api/worlds/{worldId:guid}/time/speed",
+    async (HttpContext httpContext, Guid worldId, WorldTimeSpeedRequest body, IWorldTimeCommandService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try { return Results.Ok(await service.SetMultiplierAsync(worldId, body.RealTimeMultiplier, cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (ArgumentOutOfRangeException exception) { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/time/advance",
+    async (HttpContext httpContext, Guid worldId, WorldTimeAdvanceRequest body, IWorldTimeCommandService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try { return Results.Ok(await service.AdvanceAsync(worldId, TimeSpan.FromSeconds(body.DurationSeconds), cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or OverflowException)
         { return Results.BadRequest(new { error = exception.Message }); }
     });
 
@@ -303,6 +350,10 @@ record ManualBiomeRequest(string BiomeCode);
 record MapPaintApiRequest(string Brush, int CenterX, int CenterY, int Size);
 
 record WorldClockConfigurationRequest(double TickDurationSeconds, decimal RealTimeMultiplier);
+
+record WorldTimeSpeedRequest(decimal RealTimeMultiplier);
+
+record WorldTimeAdvanceRequest(double DurationSeconds);
 
 public partial class Program
 {
