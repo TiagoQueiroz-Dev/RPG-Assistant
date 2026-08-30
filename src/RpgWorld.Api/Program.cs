@@ -2,10 +2,12 @@ using RpgWorld.Api.Realtime;
 using RpgWorld.Api.WorldMaps;
 using RpgWorld.Application.Realtime;
 using RpgWorld.Infrastructure;
+using RpgWorld.Simulation;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddSimulation();
 var frontendOrigins = builder.Configuration
     .GetSection("Frontend:AllowedOrigins")
     .GetChildren()

@@ -4,6 +4,7 @@
     <ProjectReference Include="..\RpgWorld.Application\RpgWorld.Application.csproj" />
     <ProjectReference Include="..\RpgWorld.Infrastructure\RpgWorld.Infrastructure.csproj" />
     <ProjectReference Include="..\RpgWorld.Modules.Default\RpgWorld.Modules.Default.csproj" />
+    <ProjectReference Include="..\RpgWorld.Simulation\RpgWorld.Simulation.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

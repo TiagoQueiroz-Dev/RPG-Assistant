@@ -19,4 +19,9 @@ public interface IWorldMapRepository
         Guid worldId,
         ChunkCoordinate coordinate,
         CancellationToken cancellationToken = default);
+
+    Task PersistAndReleaseChunkAsync(
+        Chunk chunk,
+        IReadOnlyCollection<Tile> tiles,
+        CancellationToken cancellationToken = default);
 }

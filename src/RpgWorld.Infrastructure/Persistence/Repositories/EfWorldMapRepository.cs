@@ -65,5 +65,24 @@ public sealed class EfWorldMapRepository(RpgWorldDbContext dbContext)
             .ThenBy(tile => tile.X)
             .ToListAsync(cancellationToken);
     }
-}
 
+    public async Task PersistAndReleaseChunkAsync(
+        Chunk chunk,
+        IReadOnlyCollection<Tile> tiles,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(chunk);
+        ArgumentNullException.ThrowIfNull(tiles);
+
+        dbContext.Update(chunk);
+        dbContext.UpdateRange(tiles);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        dbContext.Entry(chunk).State = EntityState.Detached;
+
+        foreach (var tile in tiles)
+        {
+            dbContext.Entry(tile).State = EntityState.Detached;
+        }
+    }
+}

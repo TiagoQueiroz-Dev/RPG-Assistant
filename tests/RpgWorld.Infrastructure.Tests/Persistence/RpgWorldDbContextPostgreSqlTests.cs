@@ -93,4 +93,45 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal(chunk.Id, storedChunk?.Id);
         Assert.Equal(tile.Id, Assert.Single(chunkTiles).Id);
     }
+
+    [Fact]
+    public async Task Chunk_changes_are_persisted_and_released_before_reloading()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+
+        var world = World.Create("Aster", width: 32, height: 32);
+        var coordinate = new ChunkCoordinate(0, 0);
+        var chunk = world.CreateChunk(coordinate);
+        var tile = world.CreateTile(
+            world.PositionAt(0, 0),
+            "temperate",
+            TestDefinitions,
+            elevation: 0,
+            temperatureCelsius: 20m,
+            humidity: 0.50m);
+        context.AddRange(world, chunk, tile);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repository = new EfWorldMapRepository(context);
+        var loadedChunk = await repository.GetChunkAsync(world.Id, coordinate);
+        var loadedTiles = await repository.GetTilesAsync(world.Id, coordinate);
+        var structureId = Guid.NewGuid();
+        Assert.NotNull(loadedChunk);
+        Assert.Empty(context.ChangeTracker.Entries<Chunk>());
+        Assert.Empty(context.ChangeTracker.Entries<Tile>());
+        Assert.Single(loadedTiles).AssignStructure(structureId);
+
+        await repository.PersistAndReleaseChunkAsync(loadedChunk, loadedTiles);
+
+        Assert.Empty(context.ChangeTracker.Entries<Chunk>());
+        Assert.Empty(context.ChangeTracker.Entries<Tile>());
+        var reloaded = await repository.GetTileAsync(world.PositionAt(0, 0));
+        Assert.Equal(structureId, reloaded?.StructureId);
+    }
 }
