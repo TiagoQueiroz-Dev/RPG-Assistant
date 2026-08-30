@@ -118,6 +118,22 @@ public sealed class Tile
         return true;
     }
 
+    public void RestoreMapState(
+        string biomeCode,
+        BiomeClassificationOrigin classificationOrigin,
+        decimal? classificationConfidence,
+        Guid? structureId,
+        IWorldDefinitionCatalog definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        var biome = definitions.ResolveBiome(biomeCode);
+        var terrain = definitions.ResolveTerrain(biome.TerrainCode);
+        TerrainCode = terrain.Code;
+        BiomeCode = biome.Code;
+        SetClassification(classificationOrigin, classificationConfidence);
+        StructureId = OptionalId(structureId, nameof(structureId));
+    }
+
     public void AssignResource(Guid? resourceDepositId) =>
         ResourceDepositId = OptionalId(resourceDepositId, nameof(resourceDepositId));
 

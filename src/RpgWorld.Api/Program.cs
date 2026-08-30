@@ -2,6 +2,7 @@ using RpgWorld.Api.Realtime;
 using RpgWorld.Api.WorldMaps;
 using RpgWorld.Application.Realtime;
 using RpgWorld.Application.Worlds.Importing;
+using RpgWorld.Application.Worlds.Editing;
 using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Infrastructure;
 using RpgWorld.Infrastructure.Worlds.Importing;
@@ -111,6 +112,40 @@ app.MapPut(
         }
     });
 
+app.MapPost(
+    "/api/worlds/{worldId:guid}/map/paint",
+    async (Guid worldId, MapPaintApiRequest body, IMapEditingService service, CancellationToken cancellationToken) =>
+    {
+        if (!Enum.TryParse<MapBrushKind>(body.Brush, ignoreCase: true, out var brush))
+            return Results.BadRequest(new { error = "Unknown map brush." });
+        try
+        {
+            return Results.Ok(await service.PaintAsync(
+                worldId,
+                new MapPaintRequest(brush, body.CenterX, body.CenterY, body.Size),
+                cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/map/undo",
+    async (Guid worldId, IMapEditingService service, CancellationToken cancellationToken) =>
+        await service.UndoAsync(worldId, cancellationToken) is { } result
+            ? Results.Ok(result)
+            : Results.Conflict(new { error = "There is no map edit to undo." }));
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/map/redo",
+    async (Guid worldId, IMapEditingService service, CancellationToken cancellationToken) =>
+        await service.RedoAsync(worldId, cancellationToken) is { } result
+            ? Results.Ok(result)
+            : Results.Conflict(new { error = "There is no map edit to redo." }));
+
 var summaries = new[]
 {
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
@@ -184,6 +219,8 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 }
 
 record ManualBiomeRequest(string BiomeCode);
+
+record MapPaintApiRequest(string Brush, int CenterX, int CenterY, int Size);
 
 public partial class Program
 {

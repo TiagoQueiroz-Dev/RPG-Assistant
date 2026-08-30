@@ -10,6 +10,8 @@ using RpgWorld.Infrastructure.Events;
 using RpgWorld.Infrastructure.Persistence;
 using RpgWorld.Infrastructure.Persistence.Repositories;
 using RpgWorld.Infrastructure.Worlds.Importing;
+using RpgWorld.Infrastructure.Worlds.Editing;
+using RpgWorld.Application.Worlds.Editing;
 
 namespace RpgWorld.Infrastructure;
 
@@ -40,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<IWorldImportService, WorldImportService>();
         services.AddSingleton<IMapRegionClassifier, ColorMapRegionClassifier>();
         services.AddScoped<IWorldClassificationService, WorldClassificationService>();
+        services.AddScoped<IMapEditingService, MapEditingService>();
 
         AddCaching(services, configuration);
 

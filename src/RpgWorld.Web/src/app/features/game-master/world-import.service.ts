@@ -25,4 +25,26 @@ export class WorldImportService {
     return this.api.post<unknown, Record<string, never>>(
       `worlds/${worldId}/classification/reprocess`, {});
   }
+
+  paint(
+    worldId: string,
+    tile: WorldMapTileView,
+    brush: string,
+    size: number,
+  ): Observable<unknown> {
+    return this.api.post<unknown, object>(`worlds/${worldId}/map/paint`, {
+      brush,
+      centerX: tile.x,
+      centerY: tile.y,
+      size,
+    });
+  }
+
+  undo(worldId: string): Observable<unknown> {
+    return this.api.post<unknown, Record<string, never>>(`worlds/${worldId}/map/undo`, {});
+  }
+
+  redo(worldId: string): Observable<unknown> {
+    return this.api.post<unknown, Record<string, never>>(`worlds/${worldId}/map/redo`, {});
+  }
 }

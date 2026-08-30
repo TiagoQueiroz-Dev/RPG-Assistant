@@ -18,6 +18,8 @@ export class GameMasterShell {
   protected readonly importMessage = signal('PNG, JPG ou WEBP · até 10 MB');
   protected readonly selectedMapTile = signal<WorldMapTileView | null>(null);
   protected readonly classificationRevision = signal(0);
+  protected readonly selectedBrush = signal<string | null>(null);
+  protected readonly brushSize = signal(1);
 
   protected readonly world = signal<WorldAdminView>({
     worldId: 'demo',
@@ -81,6 +83,24 @@ export class GameMasterShell {
 
   protected reprocessClassification(): void {
     this.importer.reprocess(this.world().worldId).subscribe(() =>
+      this.classificationRevision.update(value => value + 1));
+  }
+
+  protected handleMapTileSelected(tile: WorldMapTileView): void {
+    this.selectedMapTile.set(tile);
+    const brush = this.selectedBrush();
+    if (!brush) return;
+    this.importer.paint(this.world().worldId, tile, brush, this.brushSize()).subscribe(() =>
+      this.classificationRevision.update(value => value + 1));
+  }
+
+  protected undoMapEdit(): void {
+    this.importer.undo(this.world().worldId).subscribe(() =>
+      this.classificationRevision.update(value => value + 1));
+  }
+
+  protected redoMapEdit(): void {
+    this.importer.redo(this.world().worldId).subscribe(() =>
       this.classificationRevision.update(value => value + 1));
   }
 }

@@ -24,4 +24,5 @@ public sealed record WorldMapTileView(
     string BiomeCode,
     short Elevation,
     string ClassificationOrigin = "Automatic",
-    decimal? ClassificationConfidence = null);
+    decimal? ClassificationConfidence = null,
+    bool HasStructure = false);

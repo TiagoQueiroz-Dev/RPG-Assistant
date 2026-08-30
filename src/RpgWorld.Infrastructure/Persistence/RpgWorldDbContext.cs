@@ -32,6 +32,8 @@ public sealed class RpgWorldDbContext : DbContext
 
     public DbSet<WorldMapSourceImage> WorldMapSourceImages => Set<WorldMapSourceImage>();
 
+    public DbSet<MapEditOperation> MapEditOperations => Set<MapEditOperation>();
+
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)

@@ -25,6 +25,7 @@ export interface WorldMapTileView {
   readonly elevation: number;
   readonly classificationOrigin: 'Automatic' | 'Manual';
   readonly classificationConfidence: number | null;
+  readonly hasStructure: boolean;
 }
 
 export interface WorldMapOverlay {

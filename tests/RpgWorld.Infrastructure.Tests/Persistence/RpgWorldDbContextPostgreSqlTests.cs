@@ -13,6 +13,8 @@ using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.PixelFormats;
 using RpgWorld.Modules.Default.Worlds;
+using RpgWorld.Application.Worlds.Editing;
+using RpgWorld.Infrastructure.Worlds.Editing;
 using Testcontainers.PostgreSql;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
@@ -249,6 +251,72 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
             Assert.Equal(BiomeClassificationOrigin.Automatic, tile.BiomeClassificationOrigin);
             Assert.NotNull(tile.BiomeClassificationConfidence);
         });
+    }
+
+    [Fact]
+    public async Task Paints_multiple_tiles_and_persists_undo_redo_history()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var classifier = new ColorMapRegionClassifier();
+        var imported = await new WorldImportService(
+            context,
+            DefaultWorldDefinitions.Catalog,
+            classifier,
+            TimeProvider.System).ImportAsync(new WorldImportRequest(
+                "Editable world",
+                "map.png",
+                CreateImage("png"),
+                GridResolution: 32));
+        var editor = new MapEditingService(
+            context,
+            DefaultWorldDefinitions.Catalog,
+            TimeProvider.System);
+
+        var painted = await editor.PaintAsync(
+            imported.WorldId,
+            new MapPaintRequest(MapBrushKind.Desert, CenterX: 0, CenterY: 0, Size: 2));
+        Assert.Equal(4, painted.AffectedTiles);
+        context.ChangeTracker.Clear();
+        var paintedTiles = await context.Tiles
+            .Where(tile => tile.WorldId == imported.WorldId)
+            .ToArrayAsync();
+        Assert.All(paintedTiles, tile =>
+        {
+            Assert.Equal("desert", tile.BiomeCode);
+            Assert.Equal(BiomeClassificationOrigin.Manual, tile.BiomeClassificationOrigin);
+        });
+
+        await editor.UndoAsync(imported.WorldId);
+        context.ChangeTracker.Clear();
+        var undoneTiles = await context.Tiles
+            .Where(tile => tile.WorldId == imported.WorldId)
+            .ToArrayAsync();
+        Assert.All(undoneTiles, tile => Assert.Equal("forest", tile.BiomeCode));
+
+        await editor.RedoAsync(imported.WorldId);
+        context.ChangeTracker.Clear();
+        Assert.Equal(
+            4,
+            await context.Tiles.CountAsync(tile =>
+                tile.WorldId == imported.WorldId &&
+                tile.BiomeCode == "desert" &&
+                tile.BiomeClassificationOrigin == BiomeClassificationOrigin.Manual));
+
+        await editor.PaintAsync(
+            imported.WorldId,
+            new MapPaintRequest(MapBrushKind.City, CenterX: 0, CenterY: 0, Size: 1));
+        context.ChangeTracker.Clear();
+        Assert.NotNull((await context.Tiles.SingleAsync(tile =>
+            tile.WorldId == imported.WorldId && tile.X == 0 && tile.Y == 0)).StructureId);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            editor.PaintAsync(
+                imported.WorldId,
+                new MapPaintRequest(MapBrushKind.Forest, 0, 0, Size: 17)));
     }
 
     private static byte[] CreateImage(string format)

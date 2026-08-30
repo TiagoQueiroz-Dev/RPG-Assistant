@@ -37,9 +37,22 @@
   </form>
 
   <app-world-map class="map-region" [worldId]="world().worldId"
-    [refreshToken]="classificationRevision()" (tileSelected)="selectedMapTile.set($event)" />
+    [refreshToken]="classificationRevision()" (tileSelected)="handleMapTileSelected($event)" />
 
   <div class="classification-review">
+    <div class="brush-tools" aria-label="Ferramentas de pintura do mapa">
+      @for (brush of ['Forest', 'Water', 'Mountain', 'Desert', 'City']; track brush) {
+        <button type="button" [class.active]="selectedBrush() === brush"
+          (click)="selectedBrush.set(selectedBrush() === brush ? null : brush)">{{ brush }} Brush</button>
+      }
+      <label>Tamanho
+        <input type="range" min="1" max="16" [value]="brushSize()"
+          (input)="brushSize.set(+$any($event.target).value)" />
+        <span>{{ brushSize() }}</span>
+      </label>
+      <button type="button" (click)="undoMapEdit()">Desfazer</button>
+      <button type="button" (click)="redoMapEdit()">Refazer</button>
+    </div>
     @if (selectedMapTile(); as tile) {
       <form (submit)="confirmBiome($event)">
         <span>Revisando X {{ tile.x }} · Y {{ tile.y }}</span>

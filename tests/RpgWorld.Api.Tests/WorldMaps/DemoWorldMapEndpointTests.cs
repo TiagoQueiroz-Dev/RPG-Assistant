@@ -52,6 +52,19 @@ public sealed class DemoWorldMapEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Paint_endpoint_rejects_unknown_brush_before_persistence()
+    {
+        using var factory = new MapWebApplicationFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/worlds/{Guid.NewGuid()}/map/paint",
+            new { brush = "lava-laser", centerX = 0, centerY = 0, size = 1 });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private sealed class MapWebApplicationFactory : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
