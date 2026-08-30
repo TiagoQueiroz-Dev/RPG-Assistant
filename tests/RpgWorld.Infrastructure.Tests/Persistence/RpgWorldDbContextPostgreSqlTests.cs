@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using RpgWorld.Domain.Worlds;
+using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Infrastructure.Persistence;
 using RpgWorld.Infrastructure.Persistence.Repositories;
 using Testcontainers.PostgreSql;
@@ -9,6 +10,10 @@ namespace RpgWorld.Infrastructure.Tests.Persistence;
 
 public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
 {
+    private static readonly WorldDefinitionCatalog TestDefinitions = new(
+        [new TerrainDefinition("plains", "Plains", 1m, true, false)],
+        [new BiomeDefinition("temperate", "Temperate", "plains", -10m, 40m, 0.20m, 0.90m)]);
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
         .WithDatabase("rpg_world_tests")
         .WithUsername("rpg_world_tests")
@@ -66,8 +71,8 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         var position = world.PositionAt(64, 32);
         var tile = world.CreateTile(
             position,
-            "grassland",
             "temperate",
+            TestDefinitions,
             elevation: 42,
             temperatureCelsius: 18.5m,
             humidity: 0.65m);

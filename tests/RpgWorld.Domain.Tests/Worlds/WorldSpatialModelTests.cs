@@ -1,4 +1,5 @@
 using RpgWorld.Domain.Worlds;
+using RpgWorld.Modules.Default.Worlds;
 
 namespace RpgWorld.Domain.Tests.Worlds;
 
@@ -41,7 +42,7 @@ public sealed class WorldSpatialModelTests
         var tile = world.CreateTile(
             position,
             "Grassland",
-            "Temperate",
+            DefaultWorldDefinitions.Catalog,
             elevation: 42,
             temperatureCelsius: 18.5m,
             humidity: 0.65m);
@@ -56,8 +57,8 @@ public sealed class WorldSpatialModelTests
         Assert.Equal(1, chunk.Height);
         Assert.True(chunk.Contains(position));
         Assert.Equal(position, tile.Position);
-        Assert.Equal("grassland", tile.TerrainCode);
+        Assert.Equal("grassland", tile.BiomeCode);
+        Assert.Equal("plains", tile.TerrainCode);
         Assert.Equal(actorId, Assert.Single(tile.OccupantIds));
     }
 }
-

@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\RpgWorld.Domain\RpgWorld.Domain.csproj" />
+    <ProjectReference Include="..\..\src\RpgWorld.Modules.Default\RpgWorld.Modules.Default.csproj" />
   </ItemGroup>
 
 </Project>

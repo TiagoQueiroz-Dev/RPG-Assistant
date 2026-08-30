@@ -1,3 +1,5 @@
+using RpgWorld.Domain.Worlds.Definitions;
+
 namespace RpgWorld.Domain.Worlds;
 
 public sealed class Tile
@@ -11,8 +13,8 @@ public sealed class Tile
     private Tile(
         Guid id,
         Position position,
-        string terrainCode,
-        string biomeCode,
+        TerrainDefinition terrain,
+        BiomeDefinition biome,
         short elevation,
         decimal temperatureCelsius,
         decimal humidity)
@@ -21,8 +23,8 @@ public sealed class Tile
         WorldId = position.WorldId;
         X = position.X;
         Y = position.Y;
-        TerrainCode = RequiredCode(terrainCode, nameof(terrainCode));
-        BiomeCode = RequiredCode(biomeCode, nameof(biomeCode));
+        TerrainCode = terrain.Code;
+        BiomeCode = biome.Code;
         Elevation = elevation;
         SetClimate(temperatureCelsius, humidity);
     }
@@ -55,29 +57,32 @@ public sealed class Tile
 
     internal static Tile Create(
         Position position,
-        string terrainCode,
-        string biomeCode,
+        TerrainDefinition terrain,
+        BiomeDefinition biome,
         short elevation,
         decimal temperatureCelsius,
         decimal humidity) =>
         new(
             Guid.CreateVersion7(),
             position,
-            terrainCode,
-            biomeCode,
+            terrain,
+            biome,
             elevation,
             temperatureCelsius,
             humidity);
 
     public void SetEnvironment(
-        string terrainCode,
         string biomeCode,
+        IWorldDefinitionCatalog definitions,
         short elevation,
         decimal temperatureCelsius,
         decimal humidity)
     {
-        TerrainCode = RequiredCode(terrainCode, nameof(terrainCode));
-        BiomeCode = RequiredCode(biomeCode, nameof(biomeCode));
+        ArgumentNullException.ThrowIfNull(definitions);
+        var biome = definitions.ResolveBiome(biomeCode);
+        var terrain = definitions.ResolveTerrain(biome.TerrainCode);
+        TerrainCode = terrain.Code;
+        BiomeCode = biome.Code;
         Elevation = elevation;
         SetClimate(temperatureCelsius, humidity);
     }
@@ -124,19 +129,8 @@ public sealed class Tile
         Humidity = humidity;
     }
 
-    private static string RequiredCode(string value, string parameterName)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new ArgumentException("Code cannot be empty.", parameterName);
-        }
-
-        return value.Trim().ToLowerInvariant();
-    }
-
     private static Guid? OptionalId(Guid? value, string parameterName) =>
         value == Guid.Empty
             ? throw new ArgumentException("Identifier cannot be empty.", parameterName)
             : value;
 }
-

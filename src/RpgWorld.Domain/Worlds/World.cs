@@ -1,3 +1,5 @@
+using RpgWorld.Domain.Worlds.Definitions;
+
 namespace RpgWorld.Domain.Worlds;
 
 public sealed class World : AggregateRoot
@@ -104,17 +106,21 @@ public sealed class World : AggregateRoot
 
     public Tile CreateTile(
         Position position,
-        string terrainCode,
         string biomeCode,
+        IWorldDefinitionCatalog definitions,
         short elevation,
         decimal temperatureCelsius,
         decimal humidity)
     {
         EnsureContains(position);
+        ArgumentNullException.ThrowIfNull(definitions);
+        var biome = definitions.ResolveBiome(biomeCode);
+        var terrain = definitions.ResolveTerrain(biome.TerrainCode);
+
         return Tile.Create(
             position,
-            terrainCode,
-            biomeCode,
+            terrain,
+            biome,
             elevation,
             temperatureCelsius,
             humidity);
@@ -140,4 +146,3 @@ public sealed class World : AggregateRoot
         }
     }
 }
-
