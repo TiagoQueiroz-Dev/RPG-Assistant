@@ -5,6 +5,25 @@ using RpgWorld.Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
+var frontendOrigins = builder.Configuration
+    .GetSection("Frontend:AllowedOrigins")
+    .GetChildren()
+    .Select(origin => origin.Value)
+    .OfType<string>()
+    .ToArray();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+    {
+        if (frontendOrigins.Length > 0)
+        {
+            policy.WithOrigins(frontendOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        }
+    });
+});
 builder.Services.AddSignalR(options =>
 {
     options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
@@ -16,6 +35,8 @@ builder.Services.AddSingleton<
 builder.Services.AddSingleton<IWorldUpdatePublisher, SignalRWorldUpdatePublisher>();
 
 var app = builder.Build();
+
+app.UseCors("Frontend");
 
 app.MapHub<WorldHub>("/hubs/world", options =>
 {

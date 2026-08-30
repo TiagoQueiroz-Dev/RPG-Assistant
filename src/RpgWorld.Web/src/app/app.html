@@ -1,0 +1,20 @@
+<div class="app-frame">
+  <header class="topbar">
+    <a class="brand" routerLink="/" aria-label="RPG Assistant — início">
+      <span class="brand-mark" aria-hidden="true">R</span>
+      <span>
+        <strong>RPG Assistant</strong>
+        <small>Mundos que continuam vivos</small>
+      </span>
+    </a>
+
+    <nav class="role-nav" aria-label="Escolher experiência">
+      <a routerLink="/player" routerLinkActive="active">Jogador</a>
+      <a routerLink="/gm" routerLinkActive="active">Mestre</a>
+    </nav>
+  </header>
+
+  <main>
+    <router-outlet />
+  </main>
+</div>

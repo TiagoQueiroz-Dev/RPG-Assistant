@@ -1,0 +1,118 @@
+@use '../shared/experience';
+
+.player-experience {
+  --accent: var(--teal);
+}
+
+.local-conditions {
+  align-self: end;
+  padding: 1.4rem;
+  border-left: 2px solid var(--teal);
+  background: linear-gradient(90deg, rgba(91, 167, 160, 0.1), transparent);
+}
+
+.local-conditions span,
+.local-conditions strong,
+.local-conditions small {
+  display: block;
+}
+
+.local-conditions span,
+.local-conditions small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.local-conditions strong {
+  margin: 0.4rem 0;
+  font-family: var(--font-display);
+}
+
+.player-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.nearby-list > div,
+.knowledge-panel li {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.nearby-list p,
+.knowledge-panel p {
+  flex: 1;
+  margin: 0;
+}
+
+.nearby-list small,
+.knowledge-panel small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: capitalize;
+}
+
+.entity-symbol {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--teal);
+  border-radius: 50%;
+  color: var(--teal);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+}
+
+.nearby-list > div > span:last-child {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.knowledge-panel ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge-panel li > span {
+  color: var(--teal);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.privacy-note {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem 1.2rem;
+  border: 1px dashed color-mix(in srgb, var(--teal) 55%, transparent);
+  border-radius: 12px;
+  color: var(--muted);
+}
+
+.privacy-note span {
+  color: var(--teal);
+  font-size: 1.5rem;
+}
+
+.privacy-note p {
+  margin: 0;
+}
+
+.privacy-note strong {
+  color: var(--text);
+}
+
+@media (max-width: 800px) {
+  .player-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap');
+
+:root {
+  color-scheme: dark;
+  --surface: #101210;
+  --surface-raised: #171a17;
+  --text: #f3efe5;
+  --muted: #979b91;
+  --line: rgba(243, 239, 229, 0.1);
+  --line-strong: rgba(243, 239, 229, 0.25);
+  --gold: #d0a657;
+  --teal: #5ba7a0;
+  --success: #72b883;
+  --danger: #c86b62;
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-body: 'Manrope', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--surface);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 85% 10%, rgba(91, 167, 160, 0.08), transparent 30%),
+    radial-gradient(circle at 15% 55%, rgba(208, 166, 87, 0.07), transparent 35%), var(--surface);
+  font-family: var(--font-body);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}

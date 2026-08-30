@@ -1,0 +1,66 @@
+<section class="experience player-experience">
+  <div class="hero-copy">
+    <span class="eyebrow">Jornada de {{ view().characterName }}</span>
+    <h1>{{ view().currentLocation.name }}</h1>
+    <p>{{ view().currentLocation.description }}</p>
+  </div>
+
+  <aside class="local-conditions">
+    <span>{{ view().localTime }}</span>
+    <strong>{{ view().currentLocation.weather }}</strong>
+    <small>{{ view().worldName }}</small>
+  </aside>
+
+  <div class="player-grid">
+    <article class="panel nearby-panel">
+      <header>
+        <div>
+          <span class="eyebrow">Ao seu alcance</span>
+          <h2>Presenças próximas</h2>
+        </div>
+      </header>
+      <div class="nearby-list">
+        @for (entity of view().nearbyEntities; track entity.entityId) {
+          <div>
+            <span class="entity-symbol" [attr.data-kind]="entity.kind">{{
+              entity.kind.charAt(0)
+            }}</span>
+            <p>
+              <strong>{{ entity.displayName }}</strong
+              ><small>{{ entity.kind }}</small>
+            </p>
+            <span>{{ entity.distance }}</span>
+          </div>
+        }
+      </div>
+    </article>
+
+    <article class="panel knowledge-panel">
+      <header>
+        <div>
+          <span class="eyebrow">Seu conhecimento</span>
+          <h2>Regiões descobertas</h2>
+        </div>
+      </header>
+      <ol>
+        @for (region of view().discoveredRegions; track region.regionId; let index = $index) {
+          <li>
+            <span>0{{ index + 1 }}</span>
+            <p>
+              <strong>{{ region.name }}</strong
+              ><small>{{ region.knowledge }}</small>
+            </p>
+          </li>
+        }
+      </ol>
+    </article>
+  </div>
+
+  <aside class="privacy-note">
+    <span aria-hidden="true">◌</span>
+    <p>
+      <strong>Visão do personagem</strong> Somente lugares e entidades conhecidos por Liora aparecem
+      aqui.
+    </p>
+  </aside>
+</section>

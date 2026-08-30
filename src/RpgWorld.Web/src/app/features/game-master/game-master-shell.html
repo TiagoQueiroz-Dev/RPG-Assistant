@@ -1,0 +1,80 @@
+<section class="experience gm-experience">
+  <div class="hero-copy">
+    <span class="eyebrow">Painel do mestre</span>
+    <h1>{{ world().name }}</h1>
+    <p>
+      Observe a simulação inteira, antecipe tensões e intervenha apenas quando a história pedir.
+    </p>
+  </div>
+
+  <aside class="world-clock" aria-label="Relógio da simulação">
+    <span>Tempo do mundo</span>
+    <strong>{{ world().currentTime }}</strong>
+    <small><i></i> Simulação em execução</small>
+  </aside>
+
+  <div class="metric-grid" aria-label="Métricas administrativas">
+    <article>
+      <span>Atores simulados</span><strong>{{ world().totalActors }}</strong
+      ><small>em todas as regiões</small>
+    </article>
+    <article>
+      <span>Chunks ativos</span><strong>{{ world().activeChunks }}</strong
+      ><small>processamento detalhado</small>
+    </article>
+    <article>
+      <span>Cidades</span><strong>{{ world().cities.length }}</strong
+      ><small>economias autônomas</small>
+    </article>
+    <article>
+      <span>Facções</span><strong>{{ world().factions.length }}</strong
+      ><small>disputando influência</small>
+    </article>
+  </div>
+
+  <div class="admin-grid">
+    <article class="panel">
+      <header>
+        <div>
+          <span class="eyebrow">Pulso urbano</span>
+          <h2>Cidades</h2>
+        </div>
+        <button type="button">Abrir inspetor</button>
+      </header>
+      <div class="table" role="table" aria-label="Cidades do mundo">
+        @for (city of world().cities; track city.cityId) {
+          <div class="table-row" role="row">
+            <div role="cell">
+              <strong>{{ city.name }}</strong
+              ><small>{{ city.population }} habitantes</small>
+            </div>
+            <div role="cell">
+              <span>Alimento</span><strong>{{ city.foodStockDays }} dias</strong>
+            </div>
+          </div>
+        }
+      </div>
+    </article>
+
+    <article class="panel">
+      <header>
+        <div>
+          <span class="eyebrow">Equilíbrio de poder</span>
+          <h2>Facções</h2>
+        </div>
+      </header>
+      <div class="faction-list">
+        @for (faction of world().factions; track faction.factionId) {
+          <div>
+            <span class="faction-mark" [class.hostile]="faction.disposition === 'hostile'"></span>
+            <p>
+              <strong>{{ faction.name }}</strong
+              ><small>Poder {{ faction.power }}/100</small>
+            </p>
+            <span class="disposition">{{ faction.disposition }}</span>
+          </div>
+        }
+      </div>
+    </article>
+  </div>
+</section>
