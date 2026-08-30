@@ -21,10 +21,12 @@ internal sealed class WorldConfiguration : IEntityTypeConfiguration<World>
         builder.Property(world => world.Width).HasColumnName("width");
         builder.Property(world => world.Height).HasColumnName("height");
         builder.Property(world => world.ChunkSize).HasColumnName("chunk_size");
+        builder.Property(world => world.IsSimulationRunning)
+            .HasColumnName("is_simulation_running")
+            .HasDefaultValue(true);
 
         builder.Ignore(world => world.ChunkColumns);
         builder.Ignore(world => world.ChunkRows);
         builder.Ignore(world => world.DomainEvents);
     }
 }
-

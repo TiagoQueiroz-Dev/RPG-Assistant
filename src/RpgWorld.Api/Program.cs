@@ -10,12 +10,19 @@ using RpgWorld.Modules.Default.Worlds;
 using RpgWorld.Simulation;
 using Microsoft.AspNetCore.Http.Features;
 using RpgWorld.Simulation.Time;
+using RpgWorld.Simulation.Engine;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<IWorldDefinitionCatalog>(DefaultWorldDefinitions.Catalog);
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddSimulation();
+builder.Services.AddSimulation(
+    simulationEngineOptions: new SimulationEngineOptions
+    {
+        TickInterval = TimeSpan.FromMilliseconds(
+            builder.Configuration.GetValue<double?>("Simulation:TickIntervalMilliseconds")
+            ?? SimulationEngineOptions.DefaultTickInterval.TotalMilliseconds)
+    });
 var frontendOrigins = builder.Configuration
     .GetSection("Frontend:AllowedOrigins")
     .GetChildren()
@@ -111,6 +118,30 @@ app.MapPut(
         {
             return Results.BadRequest(new { error = exception.Message });
         }
+    });
+
+app.MapGet(
+    "/api/worlds/{worldId:guid}/simulation",
+    async (Guid worldId, IWorldSimulationControlService service, CancellationToken cancellationToken) =>
+    {
+        try { return Results.Ok(await service.GetStatusAsync(worldId, cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/simulation/start",
+    async (Guid worldId, IWorldSimulationControlService service, CancellationToken cancellationToken) =>
+    {
+        try { return Results.Ok(await service.StartAsync(worldId, cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/simulation/pause",
+    async (Guid worldId, IWorldSimulationControlService service, CancellationToken cancellationToken) =>
+    {
+        try { return Results.Ok(await service.PauseAsync(worldId, cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
     });
 
 app.MapPost(

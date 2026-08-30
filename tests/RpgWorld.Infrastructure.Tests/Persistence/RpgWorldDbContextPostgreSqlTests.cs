@@ -106,6 +106,36 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Simulation_repository_returns_only_running_worlds_and_persists_control_state()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var running = World.Create("Running", 8, 8);
+        var paused = World.Create("Paused", 8, 8);
+        paused.PauseSimulation();
+        context.Worlds.AddRange(running, paused);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var repository = new EfWorldSimulationRepository(context);
+
+        Assert.Equal([running.Id], await repository.ListRunningWorldIdsAsync());
+
+        var loadedPaused = await repository.GetAsync(paused.Id);
+        Assert.NotNull(loadedPaused);
+        loadedPaused.StartSimulation();
+        await repository.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var runningIds = await repository.ListRunningWorldIdsAsync();
+        Assert.Equal(2, runningIds.Count);
+        Assert.Contains(running.Id, runningIds);
+        Assert.Contains(paused.Id, runningIds);
+    }
+
+    [Fact]
     public async Task Chunk_changes_are_persisted_and_released_before_reloading()
     {
         var options = new DbContextOptionsBuilder<RpgWorldDbContext>()

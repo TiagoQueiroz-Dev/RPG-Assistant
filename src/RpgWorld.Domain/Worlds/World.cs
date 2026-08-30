@@ -18,6 +18,7 @@ public sealed class World : AggregateRoot
         Width = width;
         Height = height;
         ChunkSize = chunkSize;
+        IsSimulationRunning = true;
     }
 
     public Guid Id { get; private set; }
@@ -29,6 +30,8 @@ public sealed class World : AggregateRoot
     public int Height { get; private set; }
 
     public int ChunkSize { get; private set; }
+
+    public bool IsSimulationRunning { get; private set; }
 
     public int ChunkColumns => ((Width - 1) / ChunkSize) + 1;
 
@@ -62,6 +65,10 @@ public sealed class World : AggregateRoot
             height,
             chunkSize);
     }
+
+    public void StartSimulation() => IsSimulationRunning = true;
+
+    public void PauseSimulation() => IsSimulationRunning = false;
 
     public Position PositionAt(int x, int y)
     {
