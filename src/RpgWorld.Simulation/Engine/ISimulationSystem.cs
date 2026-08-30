@@ -6,6 +6,8 @@ public interface ISimulationSystem
 
     int Order { get; }
 
+    TimeSpan Frequency { get; }
+
     Task ExecuteAsync(
         SimulationTickContext context,
         CancellationToken cancellationToken = default);

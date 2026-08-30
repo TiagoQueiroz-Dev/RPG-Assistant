@@ -51,6 +51,87 @@ public sealed class SimulationEngineTests
     }
 
     [Fact]
+    public async Task Engine_respects_different_system_frequencies()
+    {
+        var worldId = Guid.NewGuid();
+        var calls = new List<string>();
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        await using var provider = CreateProvider(
+            new FakeWorldSimulationRepository([worldId]),
+            new RecordingClockService(),
+            new RecordingSystem("fast", 10, calls, TimeSpan.FromMilliseconds(100)),
+            new RecordingSystem("slow", 20, calls, TimeSpan.FromSeconds(1)));
+        var engine = CreateEngine(provider, timeProvider: time);
+
+        await engine.RunCycleAsync();
+        time.Advance(TimeSpan.FromMilliseconds(99));
+        await engine.RunCycleAsync();
+        time.Advance(TimeSpan.FromMilliseconds(1));
+        await engine.RunCycleAsync();
+        time.Advance(TimeSpan.FromMilliseconds(900));
+        await engine.RunCycleAsync();
+
+        Assert.Equal(3, calls.Count(call => call.StartsWith("fast", StringComparison.Ordinal)));
+        Assert.Equal(2, calls.Count(call => call.StartsWith("slow", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Scheduler_avoids_drift_and_reports_execution_diagnostics()
+    {
+        var options = new SimulationEngineOptions();
+        var scheduler = new SimulationScheduler(options);
+        var system = new RecordingSystem(
+            "movement",
+            0,
+            [],
+            SimulationSystemFrequencies.Movement);
+        var worldId = Guid.NewGuid();
+        var initial = DateTimeOffset.UnixEpoch;
+        Assert.True(scheduler.TryBegin(worldId, system, initial, out var first));
+        scheduler.Complete(first!, initial.AddMilliseconds(12), TimeSpan.FromMilliseconds(12), true);
+
+        Assert.True(scheduler.TryBegin(
+            worldId,
+            system,
+            initial.AddMilliseconds(350),
+            out var delayed));
+        scheduler.Complete(
+            delayed!,
+            initial.AddMilliseconds(370),
+            TimeSpan.FromMilliseconds(20),
+            false);
+
+        var diagnostic = Assert.Single(scheduler.GetDiagnostics(worldId));
+        Assert.Equal(initial.AddMilliseconds(100), delayed!.ScheduledForUtc);
+        Assert.Equal(initial.AddMilliseconds(400), diagnostic.NextExecutionAtUtc);
+        Assert.Equal(TimeSpan.FromMilliseconds(20), diagnostic.LastDuration);
+        Assert.Equal(2, diagnostic.ExecutionCount);
+        Assert.Equal(1, diagnostic.FailureCount);
+    }
+
+    [Fact]
+    public void Scheduler_applies_frequency_override_without_engine_changes()
+    {
+        var scheduler = new SimulationScheduler(new SimulationEngineOptions
+        {
+            SystemFrequencyOverrides = new Dictionary<string, TimeSpan>
+            {
+                ["movement"] = TimeSpan.FromMilliseconds(250)
+            }
+        });
+        var system = new RecordingSystem(
+            "Movement",
+            0,
+            [],
+            SimulationSystemFrequencies.Movement);
+        var initial = DateTimeOffset.UnixEpoch;
+
+        Assert.True(scheduler.TryBegin(Guid.NewGuid(), system, initial, out var execution));
+
+        Assert.Equal(TimeSpan.FromMilliseconds(250), execution!.Frequency);
+    }
+
+    [Fact]
     public async Task Failed_system_is_logged_without_preventing_remaining_systems()
     {
         var worldId = Guid.NewGuid();
@@ -104,16 +185,25 @@ public sealed class SimulationEngineTests
             services.AddSingleton(typeof(ISimulationSystem), system);
         }
 
+        var options = new SimulationEngineOptions
+        {
+            TickInterval = TimeSpan.FromMilliseconds(10)
+        };
+        services.AddSingleton(options);
+        services.AddSingleton<ISimulationScheduler, SimulationScheduler>();
+
         return services.BuildServiceProvider(validateScopes: true);
     }
 
     private static SimulationEngine CreateEngine(
         ServiceProvider provider,
-        ILogger<SimulationEngine>? logger = null) =>
+        ILogger<SimulationEngine>? logger = null,
+        TimeProvider? timeProvider = null) =>
         new(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            new SimulationEngineOptions { TickInterval = TimeSpan.FromMilliseconds(10) },
-            TimeProvider.System,
+            provider.GetRequiredService<SimulationEngineOptions>(),
+            timeProvider ?? TimeProvider.System,
+            provider.GetRequiredService<ISimulationScheduler>(),
             logger ?? new RecordingLogger<SimulationEngine>());
 
     private sealed class FakeWorldSimulationRepository(IReadOnlyList<Guid> runningWorldIds)
@@ -176,11 +266,14 @@ public sealed class SimulationEngineTests
     private sealed class RecordingSystem(
         string name,
         int order,
-        ICollection<string> calls) : ISimulationSystem
+        ICollection<string> calls,
+        TimeSpan? frequency = null) : ISimulationSystem
     {
         public string Name => name;
 
         public int Order => order;
+
+        public TimeSpan Frequency => frequency ?? TimeSpan.FromMilliseconds(10);
 
         public Task ExecuteAsync(
             SimulationTickContext context,
@@ -196,6 +289,8 @@ public sealed class SimulationEngineTests
         public string Name => "broken";
 
         public int Order => 10;
+
+        public TimeSpan Frequency => TimeSpan.FromMilliseconds(10);
 
         public Task ExecuteAsync(
             SimulationTickContext context,
@@ -214,6 +309,8 @@ public sealed class SimulationEngineTests
 
         public int Order => 0;
 
+        public TimeSpan Frequency => TimeSpan.FromMilliseconds(10);
+
         public async Task ExecuteAsync(
             SimulationTickContext context,
             CancellationToken cancellationToken = default)
@@ -229,6 +326,24 @@ public sealed class SimulationEngineTests
                 CancellationObserved = true;
                 throw;
             }
+        }
+    }
+
+    private sealed class ManualTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+        private long _timestamp;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public override long GetTimestamp() => _timestamp;
+
+        public void Advance(TimeSpan duration)
+        {
+            _utcNow = _utcNow.Add(duration);
+            _timestamp += duration.Ticks;
         }
     }
 

@@ -10,6 +10,7 @@ public sealed class SimulationEngine(
     IServiceScopeFactory scopeFactory,
     SimulationEngineOptions options,
     TimeProvider timeProvider,
+    ISimulationScheduler scheduler,
     ILogger<SimulationEngine> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -76,9 +77,18 @@ public sealed class SimulationEngine(
 
                 foreach (var system in systems)
                 {
+                    var observedAt = timeProvider.GetUtcNow();
+                    if (!scheduler.TryBegin(worldId, system, observedAt, out var execution))
+                    {
+                        continue;
+                    }
+
+                    var startedTimestamp = timeProvider.GetTimestamp();
+                    var succeeded = false;
                     try
                     {
                         await system.ExecuteAsync(context, cancellationToken);
+                        succeeded = true;
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                     {
@@ -91,6 +101,14 @@ public sealed class SimulationEngine(
                             "Simulation system {SystemName} failed for world {WorldId}; remaining systems will continue.",
                             system.Name,
                             worldId);
+                    }
+                    finally
+                    {
+                        scheduler.Complete(
+                            execution!,
+                            timeProvider.GetUtcNow(),
+                            timeProvider.GetElapsedTime(startedTimestamp),
+                            succeeded);
                     }
                 }
             }

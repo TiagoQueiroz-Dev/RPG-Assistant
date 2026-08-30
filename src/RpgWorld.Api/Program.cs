@@ -11,6 +11,7 @@ using RpgWorld.Simulation;
 using Microsoft.AspNetCore.Http.Features;
 using RpgWorld.Simulation.Time;
 using RpgWorld.Simulation.Engine;
+using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,7 +22,14 @@ builder.Services.AddSimulation(
     {
         TickInterval = TimeSpan.FromMilliseconds(
             builder.Configuration.GetValue<double?>("Simulation:TickIntervalMilliseconds")
-            ?? SimulationEngineOptions.DefaultTickInterval.TotalMilliseconds)
+            ?? SimulationEngineOptions.DefaultTickInterval.TotalMilliseconds),
+        SystemFrequencyOverrides = builder.Configuration
+            .GetSection("Simulation:SystemFrequencyOverrides")
+            .GetChildren()
+            .ToDictionary(
+                entry => entry.Key,
+                entry => TimeSpan.Parse(entry.Value!, CultureInfo.InvariantCulture),
+                StringComparer.OrdinalIgnoreCase)
     });
 var frontendOrigins = builder.Configuration
     .GetSection("Frontend:AllowedOrigins")
@@ -100,6 +108,11 @@ app.MapPost(
             return Results.NotFound();
         }
     });
+
+app.MapGet(
+    "/api/worlds/{worldId:guid}/simulation/diagnostics",
+    (Guid worldId, ISimulationScheduler scheduler) =>
+        Results.Ok(scheduler.GetDiagnostics(worldId)));
 
 app.MapPut(
     "/api/worlds/{worldId:guid}/tiles/{x:int}/{y:int}/biome",

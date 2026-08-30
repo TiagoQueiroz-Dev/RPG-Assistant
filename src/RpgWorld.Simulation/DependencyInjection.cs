@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton(chunkActivationOptions ?? new ChunkActivationOptions());
         services.AddSingleton(simulationEngineOptions ?? new SimulationEngineOptions());
+        services.AddSingleton<ISimulationScheduler, SimulationScheduler>();
         services.AddScoped<IChunkActivationService, ChunkActivationService>();
         services.AddScoped<IWorldClockService, WorldClockService>();
         services.AddScoped<IWorldSimulationControlService, WorldSimulationControlService>();
