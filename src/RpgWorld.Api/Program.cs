@@ -1,10 +1,26 @@
+using RpgWorld.Api.Realtime;
+using RpgWorld.Application.Realtime;
 using RpgWorld.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddSignalR(options =>
+{
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddSingleton<
+    IRealtimeSubscriptionAuthorizer,
+    ClaimBasedRealtimeSubscriptionAuthorizer>();
+builder.Services.AddSingleton<IWorldUpdatePublisher, SignalRWorldUpdatePublisher>();
 
 var app = builder.Build();
+
+app.MapHub<WorldHub>("/hubs/world", options =>
+{
+    options.AllowStatefulReconnects = true;
+});
 
 var summaries = new[]
 {
@@ -29,4 +45,8 @@ app.Run();
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+}
+
+public partial class Program
+{
 }

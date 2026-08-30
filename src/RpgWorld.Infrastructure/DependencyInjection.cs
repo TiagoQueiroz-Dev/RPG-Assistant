@@ -15,18 +15,22 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString(
-            PostgresOptions.ConnectionStringName);
-
-        if (string.IsNullOrWhiteSpace(connectionString))
+        services.AddDbContext<RpgWorldDbContext>((serviceProvider, options) =>
         {
-            throw new InvalidOperationException(
-                "Connection string 'RpgWorld' is required. Set it through " +
-                "ConnectionStrings__RpgWorld for the current environment.");
-        }
+            var runtimeConfiguration = serviceProvider
+                .GetRequiredService<IConfiguration>();
+            var connectionString = runtimeConfiguration.GetConnectionString(
+                PostgresOptions.ConnectionStringName);
 
-        services.AddDbContext<RpgWorldDbContext>(options =>
-            options.UseNpgsql(connectionString, PostgresOptions.Configure));
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException(
+                    "Connection string 'RpgWorld' is required. Set it through " +
+                    "ConnectionStrings__RpgWorld for the current environment.");
+            }
+
+            options.UseNpgsql(connectionString, PostgresOptions.Configure);
+        });
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
 
         AddCaching(services, configuration);
