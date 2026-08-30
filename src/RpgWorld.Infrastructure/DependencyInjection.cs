@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RpgWorld.Application.Caching;
+using RpgWorld.Application.Events;
 using RpgWorld.Infrastructure.Caching;
+using RpgWorld.Infrastructure.Events;
 using RpgWorld.Infrastructure.Persistence;
 
 namespace RpgWorld.Infrastructure;
@@ -25,6 +27,7 @@ public static class DependencyInjection
 
         services.AddDbContext<RpgWorldDbContext>(options =>
             options.UseNpgsql(connectionString, PostgresOptions.Configure));
+        services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
 
         AddCaching(services, configuration);
 
