@@ -25,6 +25,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RpgWorld.Domain.Tests", "te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RpgWorld.Simulation.Tests", "tests\RpgWorld.Simulation.Tests\RpgWorld.Simulation.Tests.csproj", "{223BEAEA-51F4-4935-9A11-2A52DF6CF875}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RpgWorld.Infrastructure.Tests", "tests\RpgWorld.Infrastructure.Tests\RpgWorld.Infrastructure.Tests.csproj", "{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -155,6 +159,18 @@ Global
 		{223BEAEA-51F4-4935-9A11-2A52DF6CF875}.Release|x64.Build.0 = Release|Any CPU
 		{223BEAEA-51F4-4935-9A11-2A52DF6CF875}.Release|x86.ActiveCfg = Release|Any CPU
 		{223BEAEA-51F4-4935-9A11-2A52DF6CF875}.Release|x86.Build.0 = Release|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Debug|x64.Build.0 = Debug|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Debug|x86.Build.0 = Debug|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Release|x64.ActiveCfg = Release|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Release|x64.Build.0 = Release|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Release|x86.ActiveCfg = Release|Any CPU
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -170,5 +186,6 @@ Global
 		{0D243F0A-8FC1-45C3-85D1-6D62E5DCCD8E} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{F607D9FC-8CD9-4B5A-BFD5-D81AA3C1BD50} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{223BEAEA-51F4-4935-9A11-2A52DF6CF875} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{65CCFD51-97D9-4A70-BA5F-CF31EBCDABCE} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
