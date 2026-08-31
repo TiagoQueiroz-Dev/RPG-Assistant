@@ -14,10 +14,14 @@ using RpgWorld.Simulation.Engine;
 using System.Globalization;
 using RpgWorld.Api.Authorization;
 using RpgWorld.Application.Actors.Movement;
+using RpgWorld.Domain.Actors.Traits;
+using RpgWorld.Modules.Default.Actors;
+using RpgWorld.Application.Actors.Inspection;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<IWorldDefinitionCatalog>(DefaultWorldDefinitions.Catalog);
+builder.Services.AddSingleton<ITraitDefinitionCatalog>(DefaultActorDefinitions.Catalog);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSimulation(
     simulationEngineOptions: new SimulationEngineOptions
@@ -104,6 +108,22 @@ app.MapPost(
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         { return Results.BadRequest(new { error = exception.Message }); }
     });
+
+app.MapGet(
+    "/api/worlds/{worldId:guid}/actors",
+    async (Guid worldId, int x, int y, INpcInspectorService service, CancellationToken cancellationToken) =>
+    {
+        try { return Results.Ok(await service.ListAtPositionAsync(worldId, x, y, cancellationToken)); }
+        catch (ArgumentOutOfRangeException exception)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapGet(
+    "/api/actors/{actorId:guid}/inspector",
+    async (Guid actorId, INpcInspectorService service, CancellationToken cancellationToken) =>
+        await service.GetNpcAsync(actorId, cancellationToken) is { } npc
+            ? Results.Ok(npc)
+            : Results.NotFound());
 
 app.MapPost("/worlds/import", ImportWorldAsync)
     .DisableAntiforgery()

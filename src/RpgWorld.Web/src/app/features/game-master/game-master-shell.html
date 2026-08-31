@@ -67,6 +67,66 @@
     <button type="button" (click)="reprocessClassification()">Reprocessar automáticos</button>
   </div>
 
+  <article class="panel npc-inspector" aria-labelledby="npc-inspector-title">
+    <header>
+      <div>
+        <span class="eyebrow">Personalidade autônoma</span>
+        <h2 id="npc-inspector-title">Inspetor de NPC</h2>
+      </div>
+      <form class="actor-id-search" (submit)="inspectNpcById($event)">
+        <input name="actorId" type="text" aria-label="ID do NPC" placeholder="ID do NPC" required />
+        <button type="submit">Consultar</button>
+      </form>
+    </header>
+
+    @if (actorsAtSelectedTile().length > 0) {
+      <div class="tile-actors" aria-label="Atores no tile selecionado">
+        @for (actor of actorsAtSelectedTile(); track actor.actorId) {
+          <button type="button" [disabled]="actor.kind !== 'npc'" (click)="inspectNpc(actor.actorId)">
+            <strong>{{ actor.name }}</strong>
+            <small>{{ actor.kind }} · {{ actor.currentAction ?? 'sem ação' }}</small>
+          </button>
+        }
+      </div>
+    }
+
+    @if (npcInspectorState() === 'loading') {
+      <p class="inspector-state" role="status">Lendo estado e personalidade…</p>
+    } @else if (npcInspectorState() === 'error') {
+      <p class="inspector-state error" role="alert">Não foi possível consultar esse NPC.</p>
+    } @else if (selectedNpc(); as npc) {
+      <div class="npc-summary">
+        <div>
+          <strong>{{ npc.name }}</strong>
+          <small>X {{ npc.x }} · Y {{ npc.y }} · {{ npc.job ?? 'sem trabalho' }}</small>
+        </div>
+        <dl>
+          <div><dt>Fome</dt><dd>{{ npc.hunger }}/100</dd></div>
+          <div><dt>Energia</dt><dd>{{ npc.energy }}/100</dd></div>
+          <div><dt>Dinheiro</dt><dd>{{ npc.money }}</dd></div>
+          <div><dt>Ação</dt><dd>{{ npc.currentAction ?? 'ocioso' }}</dd></div>
+        </dl>
+      </div>
+      <div class="trait-grid">
+        @for (trait of npc.traits; track trait.code) {
+          <section class="trait-card" [class.unavailable]="!trait.definitionAvailable">
+            <header><strong>{{ trait.name }}</strong><code>{{ trait.code }}</code></header>
+            <p>{{ trait.description }}</p>
+            <div class="trait-modifiers">
+              @for (modifier of modifierEntries(trait); track modifier.action) {
+                <span>{{ modifier.action }} × {{ modifier.multiplier }}</span>
+              }
+            </div>
+          </section>
+        } @empty {
+          <p class="inspector-state">Este NPC ainda não possui traits.</p>
+        }
+      </div>
+    } @else {
+      <p class="inspector-state">Selecione um tile com NPCs ou informe o ID de um NPC.</p>
+    }
+  </article>
+
   <div class="metric-grid" aria-label="Métricas administrativas">
     <article>
       <span>Atores simulados</span><strong>{{ world().totalActors }}</strong

@@ -17,9 +17,11 @@ internal sealed class NpcActorConfiguration : IEntityTypeConfiguration<NpcActor>
         builder.Property(npc => npc.NeedsUpdatedAt).HasColumnName("needs_updated_at");
         ActorConfiguration.ConfigureJson(builder.Property<List<Guid>>("_familyIds"), "family_ids");
         ActorConfiguration.ConfigureJson(builder.Property<List<NpcGoal>>("_goals"), "goals");
+        ActorConfiguration.ConfigureJson(builder.Property<List<string>>("_traitCodes"), "trait_codes");
         builder.Ignore(npc => npc.Home);
         builder.Ignore(npc => npc.FamilyIds);
         builder.Ignore(npc => npc.Goals);
+        builder.Ignore(npc => npc.TraitCodes);
         builder.HasIndex(npc => new { npc.WorldId, npc.Hunger })
             .IsDescending(false, true)
             .HasFilter("actor_type = 'npc' AND status <> 'Dead'")

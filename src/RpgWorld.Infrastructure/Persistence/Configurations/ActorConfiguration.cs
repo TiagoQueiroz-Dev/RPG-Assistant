@@ -27,6 +27,9 @@ internal sealed class ActorConfiguration : IEntityTypeConfiguration<Actor>
             table.HasCheckConstraint(
                 "ck_actors_npc_state_required",
                 "actor_type <> 'npc' OR (needs_updated_at IS NOT NULL AND family_ids IS NOT NULL AND goals IS NOT NULL)");
+            table.HasCheckConstraint(
+                "ck_actors_npc_traits_required",
+                "actor_type <> 'npc' OR trait_codes IS NOT NULL");
         });
         builder.HasKey(actor => actor.Id);
         builder.Property(actor => actor.Id).HasColumnName("id").ValueGeneratedNever();

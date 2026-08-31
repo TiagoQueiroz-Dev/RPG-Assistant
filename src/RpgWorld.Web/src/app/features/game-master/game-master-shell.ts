@@ -3,6 +3,8 @@ import { WorldMap } from '../map/world-map';
 import { WorldAdminView } from './models/world-admin-view';
 import { WorldImportService } from './world-import.service';
 import { WorldMapTileView } from '../map/models/world-map-view';
+import { NpcInspectorService } from './npc-inspector.service';
+import { ActorAtPositionView, NpcInspectorView, NpcTraitInspectorView } from './models/npc-inspector-view';
 
 @Component({
   selector: 'app-game-master-shell',
@@ -13,6 +15,7 @@ import { WorldMapTileView } from '../map/models/world-map-view';
 })
 export class GameMasterShell {
   private readonly importer = inject(WorldImportService);
+  private readonly npcInspector = inject(NpcInspectorService);
 
   protected readonly importState = signal<'idle' | 'uploading' | 'completed' | 'error'>('idle');
   protected readonly importMessage = signal('PNG, JPG ou WEBP · até 10 MB');
@@ -20,6 +23,9 @@ export class GameMasterShell {
   protected readonly classificationRevision = signal(0);
   protected readonly selectedBrush = signal<string | null>(null);
   protected readonly brushSize = signal(1);
+  protected readonly actorsAtSelectedTile = signal<readonly ActorAtPositionView[]>([]);
+  protected readonly selectedNpc = signal<NpcInspectorView | null>(null);
+  protected readonly npcInspectorState = signal<'idle' | 'loading' | 'loaded' | 'empty' | 'error'>('idle');
 
   protected readonly world = signal<WorldAdminView>({
     worldId: 'demo',
@@ -88,6 +94,7 @@ export class GameMasterShell {
 
   protected handleMapTileSelected(tile: WorldMapTileView): void {
     this.selectedMapTile.set(tile);
+    this.loadActorsAtTile(tile);
     const brush = this.selectedBrush();
     if (!brush) return;
     this.importer.paint(this.world().worldId, tile, brush, this.brushSize()).subscribe(() =>
@@ -102,5 +109,62 @@ export class GameMasterShell {
   protected redoMapEdit(): void {
     this.importer.redo(this.world().worldId).subscribe(() =>
       this.classificationRevision.update(value => value + 1));
+  }
+
+  protected inspectNpc(actorId: string): void {
+    this.npcInspectorState.set('loading');
+    this.npcInspector.inspect(actorId).subscribe({
+      next: npc => {
+        this.selectedNpc.set(npc);
+        this.npcInspectorState.set('loaded');
+      },
+      error: () => {
+        this.selectedNpc.set(null);
+        this.npcInspectorState.set('error');
+      },
+    });
+  }
+
+  protected inspectNpcById(event: SubmitEvent): void {
+    event.preventDefault();
+    const actorId = new FormData(event.currentTarget as HTMLFormElement).get('actorId')?.toString().trim();
+    if (actorId) this.inspectNpc(actorId);
+  }
+
+  protected modifierEntries(trait: NpcTraitInspectorView): readonly { action: string; multiplier: number }[] {
+    return Object.entries(trait.actionScoreMultipliers)
+      .map(([action, multiplier]) => ({ action, multiplier }))
+      .sort((left, right) => left.action.localeCompare(right.action));
+  }
+
+  private loadActorsAtTile(tile: WorldMapTileView): void {
+    const worldId = this.world().worldId;
+    if (!this.isGuid(worldId)) {
+      this.actorsAtSelectedTile.set([]);
+      this.selectedNpc.set(null);
+      this.npcInspectorState.set('empty');
+      return;
+    }
+    this.npcInspectorState.set('loading');
+    this.npcInspector.listAtPosition(worldId, tile.x, tile.y).subscribe({
+      next: actors => {
+        this.actorsAtSelectedTile.set(actors);
+        const firstNpc = actors.find(actor => actor.kind === 'npc');
+        if (firstNpc) this.inspectNpc(firstNpc.actorId);
+        else {
+          this.selectedNpc.set(null);
+          this.npcInspectorState.set('empty');
+        }
+      },
+      error: () => {
+        this.actorsAtSelectedTile.set([]);
+        this.selectedNpc.set(null);
+        this.npcInspectorState.set('error');
+      },
+    });
+  }
+
+  private isGuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
   }
 }

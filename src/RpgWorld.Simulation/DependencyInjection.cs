@@ -7,6 +7,7 @@ using RpgWorld.Simulation.Regions;
 using RpgWorld.Simulation.Actors;
 using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Simulation.Actors.Utility;
+using RpgWorld.Domain.Actors.Traits;
 
 namespace RpgWorld.Simulation;
 
@@ -47,6 +48,8 @@ public static class DependencyInjection
         services.AddSingleton<NpcAction, TravelNpcAction>();
         services.AddSingleton<NpcAction, AttackEnemyNpcAction>();
         services.AddSingleton<INpcDecisionContextProvider, DefaultNpcDecisionContextProvider>();
+        services.TryAddSingleton<ITraitDefinitionCatalog>(new TraitDefinitionCatalog([]));
+        services.AddSingleton<INpcUtilityScoreModifier, TraitUtilityScoreModifier>();
         services.AddSingleton<INpcUtilityDecisionService, NpcUtilityDecisionService>();
         services.AddSingleton<INpcDecisionDiagnostics, NpcDecisionDiagnostics>();
         services.AddScoped<ISimulationSystem, NpcUtilityAiSimulationSystem>();

@@ -91,11 +91,18 @@ public sealed record UtilityFactorScore(
     decimal Weight,
     decimal WeightedValue);
 
+public sealed record UtilityScoreModifier(
+    string Source,
+    decimal Multiplier,
+    string Reason);
+
 public sealed record NpcActionScore(
     string ActionCode,
     bool IsEligible,
+    decimal BaseScore,
     decimal Score,
     IReadOnlyList<UtilityFactorScore> Factors,
+    IReadOnlyList<UtilityScoreModifier> Modifiers,
     string? IneligibilityReason);
 
 public sealed record NpcDecision(
@@ -111,7 +118,12 @@ public sealed record NpcDecision(
         var factors = string.Join(", ", selected.Factors.Select(factor =>
             FormattableString.Invariant(
                 $"{factor.Code}={factor.Value:0.0000} (weight={factor.Weight:0.####}, contribution={factor.WeightedValue:0.0000})")));
-        return FormattableString.Invariant($"{ActionCode} selected with score {Score:0.0000}: {factors}.");
+        var modifiers = selected.Modifiers.Count == 0
+            ? string.Empty
+            : " Modifiers: " + string.Join(", ", selected.Modifiers.Select(modifier =>
+                FormattableString.Invariant($"{modifier.Source} x{modifier.Multiplier:0.####} ({modifier.Reason})"))) + ".";
+        return FormattableString.Invariant(
+            $"{ActionCode} selected with score {Score:0.0000} (base {selected.BaseScore:0.0000}): {factors}.{modifiers}");
     }
 }
 
@@ -123,4 +135,9 @@ public interface INpcUtilityDecisionService
 public interface INpcDecisionContextProvider
 {
     NpcDecisionContext Create(NpcActor npc);
+}
+
+public interface INpcUtilityScoreModifier
+{
+    IReadOnlyList<UtilityScoreModifier> GetModifiers(NpcAction action, NpcDecisionContext context);
 }

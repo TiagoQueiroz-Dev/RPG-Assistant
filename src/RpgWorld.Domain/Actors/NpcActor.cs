@@ -1,4 +1,5 @@
 using RpgWorld.Domain.Worlds;
+using RpgWorld.Domain.Actors.Traits;
 
 namespace RpgWorld.Domain.Actors;
 
@@ -9,6 +10,7 @@ public sealed class NpcActor : Actor
 
     private List<Guid> _familyIds = [];
     private List<NpcGoal> _goals = [];
+    private List<string> _traitCodes = [];
 
     private NpcActor() { }
     private NpcActor(string name, World world, Position position, int maximumHealth, DateTimeOffset createdAtUtc)
@@ -34,6 +36,7 @@ public sealed class NpcActor : Actor
     public DateTimeOffset NeedsUpdatedAt { get; private set; }
     public IReadOnlyList<Guid> FamilyIds => _familyIds;
     public IReadOnlyList<NpcGoal> Goals => _goals.OrderByDescending(goal => goal.Priority).ToArray();
+    public IReadOnlyList<string> TraitCodes => _traitCodes.Order(StringComparer.Ordinal).ToArray();
 
     public static NpcActor Create(string name, World world, Position position, DateTimeOffset createdAtUtc, int maximumHealth = 100) =>
         new(name, world, position, maximumHealth, createdAtUtc);
@@ -137,6 +140,25 @@ public sealed class NpcActor : Actor
         AdvanceNeedsTo(worldInstant);
         _goals.RemoveAll(existing => string.Equals(existing.Code, goal.Code, StringComparison.OrdinalIgnoreCase));
         _goals.Add(goal);
+        Touch(worldInstant);
+    }
+
+    public void AddTrait(TraitDefinition trait, DateTimeOffset worldInstant)
+    {
+        EnsureAlive();
+        ArgumentNullException.ThrowIfNull(trait);
+        AdvanceNeedsTo(worldInstant);
+        if (!_traitCodes.Contains(trait.Code, StringComparer.OrdinalIgnoreCase))
+            _traitCodes.Add(trait.Code);
+        Touch(worldInstant);
+    }
+
+    public void RemoveTrait(string traitCode, DateTimeOffset worldInstant)
+    {
+        EnsureAlive();
+        if (string.IsNullOrWhiteSpace(traitCode)) throw new ArgumentException("Trait code is required.", nameof(traitCode));
+        AdvanceNeedsTo(worldInstant);
+        _traitCodes.RemoveAll(code => string.Equals(code, traitCode.Trim(), StringComparison.OrdinalIgnoreCase));
         Touch(worldInstant);
     }
 

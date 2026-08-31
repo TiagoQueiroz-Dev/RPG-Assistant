@@ -12,6 +12,7 @@ using RpgWorld.Api.WorldMaps;
 using RpgWorld.Simulation.Time;
 using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Domain.Worlds;
+using RpgWorld.Application.Actors.Inspection;
 
 namespace RpgWorld.Api.Tests.WorldMaps;
 
@@ -134,6 +135,27 @@ public sealed class DemoWorldMapEndpointTests
             factory.Services.GetRequiredService<RecordingActorMovementService>().LastRequest);
     }
 
+    [Fact]
+    public async Task Npc_inspector_endpoints_expose_tile_actors_and_trait_effects()
+    {
+        using var factory = new MapWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var worldId = Guid.NewGuid();
+        var actorId = factory.Services.GetRequiredService<RecordingNpcInspectorService>().ActorId;
+
+        var actors = await client.GetFromJsonAsync<ActorAtPositionView[]>(
+            $"/api/worlds/{worldId}/actors?x=4&y=6");
+        var inspector = await client.GetFromJsonAsync<NpcInspectorView>(
+            $"/api/actors/{actorId}/inspector");
+
+        Assert.Equal(actorId, Assert.Single(actors!).ActorId);
+        var trait = Assert.Single(inspector!.Traits);
+        Assert.Equal("brave", trait.Code);
+        Assert.Equal(1.35m, trait.ActionScoreMultipliers["AttackEnemy"]);
+        Assert.Equal((worldId, 4, 6), factory.Services
+            .GetRequiredService<RecordingNpcInspectorService>().LastPosition);
+    }
+
     private static HttpRequestMessage JsonRequest(HttpMethod method, string uri, object body) =>
         new(method, uri) { Content = JsonContent.Create(body) };
 
@@ -162,6 +184,10 @@ public sealed class DemoWorldMapEndpointTests
                 services.AddSingleton<RecordingActorMovementService>();
                 services.AddSingleton<IActorMovementService>(provider =>
                     provider.GetRequiredService<RecordingActorMovementService>());
+                services.RemoveAll<INpcInspectorService>();
+                services.AddSingleton<RecordingNpcInspectorService>();
+                services.AddSingleton<INpcInspectorService>(provider =>
+                    provider.GetRequiredService<RecordingNpcInspectorService>());
             });
         }
     }
@@ -241,5 +267,47 @@ public sealed class DemoWorldMapEndpointTests
                 false,
                 1m));
         }
+    }
+
+    private sealed class RecordingNpcInspectorService : INpcInspectorService
+    {
+        public Guid ActorId { get; } = Guid.NewGuid();
+        public (Guid WorldId, int X, int Y)? LastPosition { get; private set; }
+
+        public Task<IReadOnlyList<ActorAtPositionView>> ListAtPositionAsync(
+            Guid worldId,
+            int x,
+            int y,
+            CancellationToken cancellationToken = default)
+        {
+            LastPosition = (worldId, x, y);
+            return Task.FromResult<IReadOnlyList<ActorAtPositionView>>([
+                new ActorAtPositionView(ActorId, "Brave NPC", "npc", "AttackEnemy", ["brave"])
+            ]);
+        }
+
+        public Task<NpcInspectorView?> GetNpcAsync(
+            Guid actorId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<NpcInspectorView?>(actorId != ActorId ? null : new NpcInspectorView(
+                ActorId,
+                Guid.NewGuid(),
+                "Brave NPC",
+                4,
+                6,
+                100,
+                100,
+                10m,
+                80m,
+                25m,
+                "guard",
+                "AttackEnemy",
+                null,
+                [new NpcTraitInspectorView(
+                    "brave",
+                    "Brave",
+                    "Faces danger.",
+                    new Dictionary<string, decimal> { ["AttackEnemy"] = 1.35m },
+                    true)]));
     }
 }

@@ -3,9 +3,16 @@ namespace RpgWorld.Simulation.Actors.Utility;
 public sealed class NpcUtilityDecisionService : INpcUtilityDecisionService
 {
     private readonly NpcAction[] _actions;
+    private readonly INpcUtilityScoreModifier[] _modifiers;
     private readonly UtilityAiOptions _options;
 
     public NpcUtilityDecisionService(IEnumerable<NpcAction> actions, UtilityAiOptions options)
+        : this(actions, options, []) { }
+
+    public NpcUtilityDecisionService(
+        IEnumerable<NpcAction> actions,
+        UtilityAiOptions options,
+        IEnumerable<INpcUtilityScoreModifier> modifiers)
     {
         ArgumentNullException.ThrowIfNull(actions);
         _actions = actions.OrderBy(action => action.Code, StringComparer.Ordinal).ToArray();
@@ -14,6 +21,8 @@ public sealed class NpcUtilityDecisionService : INpcUtilityDecisionService
             throw new ArgumentException("NPC action codes must be unique.", nameof(actions));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _options.Validate();
+        ArgumentNullException.ThrowIfNull(modifiers);
+        _modifiers = modifiers.ToArray();
     }
 
     public NpcDecision? Decide(NpcDecisionContext context)
@@ -34,7 +43,7 @@ public sealed class NpcUtilityDecisionService : INpcUtilityDecisionService
     {
         var eligibility = action.CheckEligibility(context);
         if (!eligibility.IsEligible)
-            return new NpcActionScore(action.Code, false, 0m, [], eligibility.Reason);
+            return new NpcActionScore(action.Code, false, 0m, 0m, [], [], eligibility.Reason);
 
         var factors = action.Considerations.Select(consideration =>
         {
@@ -47,7 +56,16 @@ public sealed class NpcUtilityDecisionService : INpcUtilityDecisionService
         var totalWeight = factors.Sum(factor => factor.Weight);
         if (totalWeight <= 0m)
             throw new InvalidOperationException($"Eligible action '{action.Code}' must have a positive total weight.");
-        var score = factors.Sum(factor => factor.WeightedValue) / totalWeight;
-        return new NpcActionScore(action.Code, true, score, factors, null);
+        var baseScore = factors.Sum(factor => factor.WeightedValue) / totalWeight;
+        var modifiers = _modifiers
+            .SelectMany(modifier => modifier.GetModifiers(action, context))
+            .ToArray();
+        if (modifiers.Any(modifier => modifier.Multiplier <= 0m))
+            throw new InvalidOperationException($"Score modifiers for '{action.Code}' must be positive.");
+        var score = Math.Clamp(
+            modifiers.Aggregate(baseScore, (current, modifier) => current * modifier.Multiplier),
+            0m,
+            1m);
+        return new NpcActionScore(action.Code, true, baseScore, score, factors, modifiers, null);
     }
 }

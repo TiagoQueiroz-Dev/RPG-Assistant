@@ -1,0 +1,135 @@
+.npc-inspector {
+  grid-column: 1 / -1;
+}
+
+.npc-inspector > header,
+.trait-card header,
+.npc-summary,
+.actor-id-search,
+.tile-actors {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.actor-id-search input {
+  min-width: 260px;
+}
+
+.actor-id-search input,
+.actor-id-search button,
+.tile-actors button {
+  min-height: 36px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: rgba(10, 15, 16, 0.72);
+  font: inherit;
+}
+
+.tile-actors {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+
+.tile-actors button strong,
+.tile-actors button small,
+.npc-summary strong,
+.npc-summary small {
+  display: block;
+}
+
+.tile-actors button small,
+.npc-summary small,
+.trait-card p,
+.inspector-state {
+  color: var(--muted);
+}
+
+.npc-summary {
+  align-items: flex-start;
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.npc-summary dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(90px, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.npc-summary dt {
+  color: var(--muted);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+.npc-summary dd {
+  margin: 0.15rem 0 0;
+}
+
+.trait-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.7rem;
+}
+
+.trait-card {
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(208, 166, 87, 0.05);
+}
+
+.trait-card.unavailable {
+  border-color: var(--danger);
+}
+
+.trait-card p {
+  min-height: 2.5rem;
+  margin: 0.65rem 0;
+  font-size: 0.78rem;
+}
+
+.trait-card code {
+  color: var(--muted);
+}
+
+.trait-modifiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.trait-modifiers span {
+  padding: 0.25rem 0.45rem;
+  border-radius: 999px;
+  color: var(--gold);
+  background: rgba(208, 166, 87, 0.12);
+  font-size: 0.68rem;
+}
+
+.inspector-state.error {
+  color: var(--danger);
+}
+
+@media (max-width: 800px) {
+  .npc-inspector > header,
+  .npc-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actor-id-search input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .npc-summary dl {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

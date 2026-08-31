@@ -16,6 +16,7 @@ using RpgWorld.Modules.Default.Worlds;
 using RpgWorld.Application.Worlds.Editing;
 using RpgWorld.Application.Actors;
 using RpgWorld.Domain.Actors;
+using RpgWorld.Domain.Actors.Traits;
 using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Infrastructure.Worlds.Editing;
 using Testcontainers.PostgreSql;
@@ -226,6 +227,11 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
             urgentNpc.AddFamilyMember(familyMemberId, start.AddHours(18));
             urgentNpc.JoinFaction(factionId, start.AddHours(18));
             urgentNpc.SetGoal("feed-family", 90, familyMemberId, start.AddHours(18));
+            urgentNpc.AddTrait(new TraitDefinition(
+                "ambitious",
+                "Ambitious",
+                "Pursues greater status.",
+                new Dictionary<string, decimal> { ["Work"] = 1.3m }), start.AddHours(18));
             writeContext.AddRange(world, urgentNpc, satisfiedNpc, player);
             await writeContext.SaveChangesAsync();
             worldId = world.Id;
@@ -246,6 +252,7 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal(familyMemberId, Assert.Single(stored.FamilyIds));
         Assert.Equal(factionId, stored.FactionId);
         Assert.Equal("feed-family", Assert.Single(stored.Goals).Code);
+        Assert.Equal(["ambitious"], stored.TraitCodes);
         Assert.Equal(urgentNpcId, Assert.Single(urgent).ActorId);
     }
 
