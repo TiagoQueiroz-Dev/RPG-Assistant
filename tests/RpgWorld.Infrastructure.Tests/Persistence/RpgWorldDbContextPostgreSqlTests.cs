@@ -38,6 +38,7 @@ using RpgWorld.Domain.Worlds.Cities;
 using RpgWorld.Simulation.Worlds.Economy;
 using RpgWorld.Application.Worlds.Factions;
 using RpgWorld.Domain.Worlds.Factions;
+using RpgWorld.Simulation.Worlds.Factions;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -907,6 +908,58 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Empty(south.Relations);
         Assert.Equal(2, north.History.Count(entry =>
             entry.EventType == FactionHistoryEventTypes.DiplomaticStateChanged));
+    }
+
+    [Fact]
+    public async Task Emergent_war_score_and_declaration_survive_context_restart()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString()).Options;
+        var now = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Persistent emergent war", 8, 8);
+        var firstLeader = NpcActor.Create("First leader", world, world.PositionAt(1, 1), now);
+        var secondLeader = NpcActor.Create("Second leader", world, world.PositionAt(6, 6), now);
+        Guid firstId;
+        Guid secondId;
+
+        await using (var context = new RpgWorldDbContext(options))
+        {
+            await context.Database.MigrateAsync();
+            context.AddRange(world, firstLeader, secondLeader);
+            await context.SaveChangesAsync();
+            var service = new FactionService(new EfFactionRepository(context));
+            firstId = (await service.CreateAsync(new CreateFactionRequest(
+                world.Id, "First", FactionType.Army, firstLeader.Id, 0m, 100m, now.AddHours(1)))).FactionId;
+            secondId = (await service.CreateAsync(new CreateFactionRequest(
+                world.Id, "Second", FactionType.Army, secondLeader.Id, 0m, 10m, now.AddHours(1)))).FactionId;
+        }
+
+        await using (var simulationContext = new RpgWorldDbContext(options))
+        {
+            var repository = new EfFactionRepository(simulationContext);
+            var warOptions = new WarDeclarationOptions
+            {
+                DeclareWarThreshold = 50m,
+                BorderConflictWeight = 0m,
+                ResourceDisputeWeight = 0m,
+                HistoricalHatredWeight = 0m,
+                AggressiveLeaderWeight = 0m,
+                WeakEnemyWeight = 100m
+            };
+            var system = new FactionWarDeclarationSimulationSystem(
+                repository, new WarScoreCalculator(warOptions));
+            var instant = now.AddHours(2);
+            await system.ExecuteAsync(new SimulationTickContext(
+                world.Id, new WorldClockSnapshot(world.Id, instant, TimeSpan.FromMinutes(30), 1m, instant)));
+        }
+
+        await using var readContext = new RpgWorldDbContext(options);
+        var first = await readContext.Factions.AsNoTracking().SingleAsync(faction => faction.Id == firstId);
+        var relation = first.Relations[secondId];
+        Assert.Equal(FactionRelationKind.War, relation.Kind);
+        Assert.Equal(90m, relation.LastWarScore!.Total);
+        Assert.Equal(50m, relation.LastWarScore.DeclareWarThreshold);
+        Assert.Contains(first.History, entry => entry.EventType == FactionHistoryEventTypes.WarDeclared);
     }
 
     [Theory]

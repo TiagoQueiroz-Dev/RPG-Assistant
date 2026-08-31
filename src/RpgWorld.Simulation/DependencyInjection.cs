@@ -12,6 +12,7 @@ using RpgWorld.Application.Actors.Housing;
 using RpgWorld.Simulation.Actors.Housing;
 using RpgWorld.Simulation.Worlds.Resources;
 using RpgWorld.Simulation.Worlds.Economy;
+using RpgWorld.Simulation.Worlds.Factions;
 
 namespace RpgWorld.Simulation;
 
@@ -24,7 +25,8 @@ public static class DependencyInjection
         SimulationLevelOptions? simulationLevelOptions = null,
         UtilityAiOptions? utilityAiOptions = null,
         NpcHousingOptions? npcHousingOptions = null,
-        CityEconomyOptions? cityEconomyOptions = null)
+        CityEconomyOptions? cityEconomyOptions = null,
+        WarDeclarationOptions? warDeclarationOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -67,6 +69,11 @@ public static class DependencyInjection
         economyOptions.Validate();
         services.AddSingleton(economyOptions);
         services.AddScoped<ISimulationSystem, CityEconomySimulationSystem>();
+        var warOptions = warDeclarationOptions ?? new WarDeclarationOptions();
+        warOptions.Validate();
+        services.AddSingleton(warOptions);
+        services.AddSingleton<WarScoreCalculator>();
+        services.AddScoped<ISimulationSystem, FactionWarDeclarationSimulationSystem>();
         var housingOptions = npcHousingOptions ?? new NpcHousingOptions();
         housingOptions.Validate();
         services.AddSingleton(housingOptions);

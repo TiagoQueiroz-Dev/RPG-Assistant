@@ -7,7 +7,7 @@ using RpgWorld.Domain.Worlds.Factions;
 
 namespace RpgWorld.Infrastructure.Persistence.Repositories;
 
-public sealed class EfFactionRepository(RpgWorldDbContext dbContext) : IFactionRepository
+public sealed class EfFactionRepository(RpgWorldDbContext dbContext) : IFactionRepository, IFactionWarRepository
 {
     public Task<World?> GetWorldAsync(Guid worldId, CancellationToken cancellationToken = default) =>
         dbContext.Worlds.SingleOrDefaultAsync(world => world.Id == worldId, cancellationToken);
@@ -23,6 +23,48 @@ public sealed class EfFactionRepository(RpgWorldDbContext dbContext) : IFactionR
             .Where(faction => faction.WorldId == worldId)
             .OrderBy(faction => faction.Name).ThenBy(faction => faction.Id)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Faction>> ListActiveAsync(
+        Guid worldId,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.Factions.Include("_territoryTiles")
+            .Where(faction => faction.WorldId == worldId && faction.Status == FactionStatus.Active)
+            .OrderBy(faction => faction.Id).ToListAsync(cancellationToken);
+
+    public async Task<FactionWarContext> BuildContextAsync(
+        Faction source,
+        Faction target,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
+        var targetTerritory = target.Territory.Select(position => (position.X, position.Y)).ToHashSet();
+        var sharedEdges = source.Territory.Sum(position =>
+            Adjacent(position).Count(targetTerritory.Contains));
+        var cities = await dbContext.Cities.AsNoTracking()
+            .Where(city => city.Status != CityStatus.Destroyed &&
+                (city.GoverningFactionId == source.Id || city.GoverningFactionId == target.Id))
+            .ToListAsync(cancellationToken);
+        var sourceShortages = cities.Where(city => city.GoverningFactionId == source.Id)
+            .Sum(city => city.ResourceMarkets.Values.Count(market =>
+                market.Condition == CityMarketCondition.Shortage));
+        var targetResources = cities.Where(city => city.GoverningFactionId == target.Id)
+            .Sum(city => city.ResourceStocks.Values.Sum());
+        var leader = source.LeaderActorId is { } leaderId
+            ? await dbContext.Actors.AsNoTracking().OfType<NpcActor>()
+                .SingleOrDefaultAsync(actor => actor.Id == leaderId, cancellationToken)
+            : null;
+        var aggressive = leader?.TraitCodes.Any(code => code is "aggressive" or "warlike" or "ruthless") ?? false;
+        return new FactionWarContext(sharedEdges, sourceShortages, targetResources, aggressive);
+    }
+
+    private static IEnumerable<(int X, int Y)> Adjacent(Position position)
+    {
+        yield return (position.X + 1, position.Y);
+        yield return (position.X - 1, position.Y);
+        yield return (position.X, position.Y + 1);
+        yield return (position.X, position.Y - 1);
+    }
 
     public Task<bool> NameExistsAsync(
         Guid worldId,

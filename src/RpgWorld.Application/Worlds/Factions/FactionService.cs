@@ -191,6 +191,38 @@ public sealed class FactionService(IFactionRepository repository) : IFactionServ
         return ToView(faction);
     }
 
+    public async Task<FactionMasterView> PreventWarAsync(
+        Guid factionId, Guid targetFactionId, DateTimeOffset preventedUntilUtc, string reason,
+        DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default)
+    {
+        var (faction, target) = await RequiredFactionPairAsync(factionId, targetFactionId, cancellationToken);
+        faction.PreventWar(target.Id, preventedUntilUtc, reason, occurredAtUtc);
+        await repository.SaveChangesAsync(cancellationToken);
+        return ToView(faction);
+    }
+
+    public async Task<FactionMasterView> AllowWarAsync(
+        Guid factionId, Guid targetFactionId, string reason, DateTimeOffset occurredAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var (faction, target) = await RequiredFactionPairAsync(factionId, targetFactionId, cancellationToken);
+        faction.AllowWar(target.Id, reason, occurredAtUtc);
+        await repository.SaveChangesAsync(cancellationToken);
+        return ToView(faction);
+    }
+
+    public async Task<FactionMasterView> ForceWarAsync(
+        Guid factionId, Guid targetFactionId, string reason, DateTimeOffset occurredAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var (faction, target) = await RequiredFactionPairAsync(factionId, targetFactionId, cancellationToken);
+        var score = faction.Relations.GetValueOrDefault(target.Id)?.LastWarScore
+            ?? new FactionWarScore(new FactionWarFactors(0m, 0m, 0m, 0m, 0m), 0m, 100m, occurredAtUtc);
+        faction.DeclareWar(target.Id, score with { EvaluatedAtUtc = occurredAtUtc.ToUniversalTime() }, reason, true, occurredAtUtc);
+        await repository.SaveChangesAsync(cancellationToken);
+        return ToView(faction);
+    }
+
     public async Task<FactionMasterView> DissolveAsync(
         Guid factionId,
         string reason,
@@ -246,6 +278,17 @@ public sealed class FactionService(IFactionRepository repository) : IFactionServ
         await repository.GetAsync(factionId, cancellationToken)
         ?? throw new KeyNotFoundException($"Faction '{factionId}' was not found.");
 
+    private async Task<(Faction Source, Faction Target)> RequiredFactionPairAsync(
+        Guid factionId, Guid targetFactionId, CancellationToken cancellationToken)
+    {
+        var faction = await RequiredFactionAsync(factionId, cancellationToken);
+        var target = await RequiredFactionAsync(targetFactionId, cancellationToken);
+        if (faction.Id == target.Id) throw new InvalidOperationException("A faction cannot declare war on itself.");
+        if (target.WorldId != faction.WorldId) throw new InvalidOperationException("War factions must belong to the same world.");
+        if (target.Status == FactionStatus.Dissolved) throw new InvalidOperationException("Cannot declare war on a dissolved faction.");
+        return (faction, target);
+    }
+
     private async Task<Actor> RequiredActorAsync(Guid actorId, CancellationToken cancellationToken) =>
         await repository.GetActorAsync(actorId, cancellationToken)
         ?? throw new KeyNotFoundException($"Actor '{actorId}' was not found.");
@@ -271,6 +314,9 @@ public sealed class FactionService(IFactionRepository repository) : IFactionServ
                 relation.Tension,
                 relation.IsVassal,
                 relation.UpdatedAtUtc,
+                relation.LastWarScore,
+                relation.WarPreventedUntilUtc,
+                relation.WarPreventionReason,
                 relation.History.Select(change => new FactionRelationChangeView(
                     change.Id,
                     change.Source.ToString(),

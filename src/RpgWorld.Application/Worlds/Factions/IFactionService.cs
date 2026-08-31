@@ -21,6 +21,9 @@ public sealed record FactionRelationView(
     int Tension,
     bool IsVassal,
     DateTimeOffset UpdatedAtUtc,
+    FactionWarScore? LastWarScore,
+    DateTimeOffset? WarPreventedUntilUtc,
+    string? WarPreventionReason,
     IReadOnlyList<FactionRelationChangeView> History);
 
 public sealed record FactionRelationChangeView(
@@ -70,5 +73,8 @@ public interface IFactionService
     Task<FactionMasterView> AdjustWealthAsync(Guid factionId, decimal delta, string reason, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
     Task<FactionMasterView> SetMilitaryPowerAsync(Guid factionId, decimal value, string reason, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
     Task<FactionMasterView> ApplyRelationModifierAsync(Guid factionId, Guid targetFactionId, FactionRelationModifier modifier, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
+    Task<FactionMasterView> PreventWarAsync(Guid factionId, Guid targetFactionId, DateTimeOffset preventedUntilUtc, string reason, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
+    Task<FactionMasterView> AllowWarAsync(Guid factionId, Guid targetFactionId, string reason, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
+    Task<FactionMasterView> ForceWarAsync(Guid factionId, Guid targetFactionId, string reason, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
     Task<FactionMasterView> DissolveAsync(Guid factionId, string reason, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
 }

@@ -115,6 +115,17 @@ public sealed class DemoWorldMapEndpointTests
                     tensionDelta = 10,
                     occurredAtUtc = DateTimeOffset.UnixEpoch
                 }),
+            JsonRequest(HttpMethod.Post,
+                $"/api/worlds/{worldId}/factions/{Guid.NewGuid()}/wars/{Guid.NewGuid()}/force",
+                new { reason = "Unauthorized war", occurredAtUtc = DateTimeOffset.UnixEpoch }),
+            JsonRequest(HttpMethod.Post,
+                $"/api/worlds/{worldId}/factions/{Guid.NewGuid()}/wars/{Guid.NewGuid()}/prevent",
+                new
+                {
+                    preventedUntilUtc = DateTimeOffset.UnixEpoch.AddDays(1),
+                    reason = "Unauthorized prevention",
+                    occurredAtUtc = DateTimeOffset.UnixEpoch
+                }),
             JsonRequest(HttpMethod.Put, $"/api/worlds/{worldId}/clock/configuration", new { tickDurationSeconds = 60, realTimeMultiplier = 1 }),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/time/pause"),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/time/resume"),

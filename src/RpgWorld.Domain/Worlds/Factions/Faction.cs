@@ -243,6 +243,96 @@ public sealed class Faction : AggregateRoot
         return updated;
     }
 
+    public FactionRelation RecordWarAssessment(
+        Guid targetFactionId,
+        FactionWarScore score,
+        DateTimeOffset occurredAtUtc)
+    {
+        EnsureActive();
+        if (targetFactionId == Guid.Empty || targetFactionId == Id)
+            throw new ArgumentException("War target faction is invalid.", nameof(targetFactionId));
+        ArgumentNullException.ThrowIfNull(score);
+        var relation = _relations.GetValueOrDefault(targetFactionId)
+            ?? FactionRelation.Neutral(targetFactionId, CreatedAtUtc);
+        var updated = relation.RecordWarScore(score);
+        _relations[targetFactionId] = updated;
+        Touch(occurredAtUtc);
+        return updated;
+    }
+
+    public void PreventWar(
+        Guid targetFactionId,
+        DateTimeOffset preventedUntilUtc,
+        string reason,
+        DateTimeOffset occurredAtUtc)
+    {
+        EnsureActive();
+        if (targetFactionId == Guid.Empty || targetFactionId == Id)
+            throw new ArgumentException("War target faction is invalid.", nameof(targetFactionId));
+        var relation = _relations.GetValueOrDefault(targetFactionId)
+            ?? FactionRelation.Neutral(targetFactionId, CreatedAtUtc);
+        var updated = relation.PreventWar(preventedUntilUtc, reason, occurredAtUtc);
+        _relations[targetFactionId] = updated;
+        Touch(occurredAtUtc);
+        AddHistory(FactionHistoryEventTypes.WarPrevented, reason, UpdatedAtUtc,
+            new Dictionary<string, string>
+            {
+                ["targetFactionId"] = targetFactionId.ToString(),
+                ["preventedUntilUtc"] = preventedUntilUtc.ToUniversalTime().ToString("O")
+            });
+    }
+
+    public void AllowWar(Guid targetFactionId, string reason, DateTimeOffset occurredAtUtc)
+    {
+        EnsureActive();
+        if (!_relations.TryGetValue(targetFactionId, out var relation)) return;
+        _relations[targetFactionId] = relation.AllowWar(occurredAtUtc);
+        Touch(occurredAtUtc);
+        AddHistory(FactionHistoryEventTypes.WarPreventionLifted, RequiredText(reason, nameof(reason), 500), UpdatedAtUtc,
+            new Dictionary<string, string> { ["targetFactionId"] = targetFactionId.ToString() });
+    }
+
+    public bool DeclareWar(
+        Guid targetFactionId,
+        FactionWarScore warScore,
+        string reason,
+        bool forcedByGameMaster,
+        DateTimeOffset occurredAtUtc)
+    {
+        EnsureActive();
+        if (targetFactionId == Guid.Empty || targetFactionId == Id)
+            throw new ArgumentException("War target faction is invalid.", nameof(targetFactionId));
+        ArgumentNullException.ThrowIfNull(warScore);
+        var current = _relations.GetValueOrDefault(targetFactionId)
+            ?? FactionRelation.Neutral(targetFactionId, CreatedAtUtc);
+        if (current.Kind == FactionRelationKind.War) return false;
+        if (!forcedByGameMaster && current.IsWarPreventedAt(occurredAtUtc)) return false;
+        var description = RequiredText(reason, nameof(reason), 500);
+        var tensionDelta = Math.Max(0, 80 - current.Tension);
+        var relation = ApplyRelationModifier(
+            targetFactionId,
+            new FactionRelationModifier(
+                FactionRelationModifierSource.Event,
+                description,
+                tensionDelta: tensionDelta,
+                vassalage: false),
+            occurredAtUtc);
+        relation = relation.RecordWarScore(warScore);
+        _relations[targetFactionId] = relation;
+        AddHistory(FactionHistoryEventTypes.WarDeclared, description, occurredAtUtc,
+            new Dictionary<string, string>
+            {
+                ["targetFactionId"] = targetFactionId.ToString(),
+                ["warScore"] = warScore.Total.ToString(CultureInfo.InvariantCulture),
+                ["threshold"] = warScore.DeclareWarThreshold.ToString(CultureInfo.InvariantCulture),
+                ["forcedByGameMaster"] = forcedByGameMaster.ToString()
+            });
+        RaiseDomainEvent(new FactionWarDeclaredEvent(
+            Id, targetFactionId, WorldId, warScore, forcedByGameMaster, description,
+            occurredAtUtc.ToUniversalTime()));
+        return true;
+    }
+
     public void Dissolve(string reason, DateTimeOffset occurredAtUtc)
     {
         EnsureActive();

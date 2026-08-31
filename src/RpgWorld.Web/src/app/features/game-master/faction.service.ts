@@ -24,7 +24,24 @@ export interface FactionRelationView {
   readonly tension: number;
   readonly isVassal: boolean;
   readonly updatedAtUtc: string;
+  readonly lastWarScore: FactionWarScoreView | null;
+  readonly warPreventedUntilUtc: string | null;
+  readonly warPreventionReason: string | null;
   readonly history: readonly FactionRelationChangeView[];
+}
+
+export interface FactionWarScoreView {
+  readonly factors: {
+    readonly borderConflict: number;
+    readonly resourceDispute: number;
+    readonly historicalHatred: number;
+    readonly aggressiveLeader: number;
+    readonly weakEnemy: number;
+  };
+  readonly total: number;
+  readonly declareWarThreshold: number;
+  readonly evaluatedAtUtc: string;
+  readonly reachedThreshold: boolean;
 }
 
 export interface FactionRelationChangeView {

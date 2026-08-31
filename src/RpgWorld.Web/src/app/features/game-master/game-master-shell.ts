@@ -208,7 +208,9 @@ export class GameMasterShell {
           memberCount: faction.memberActorIds.length,
           territorySize: faction.territory.length,
           diplomacySummary: faction.relations.length > 0
-            ? faction.relations.map(relation => relation.state).join(', ')
+            ? faction.relations.map(relation => relation.lastWarScore
+              ? `${relation.state} (guerra ${relation.lastWarScore.total}/${relation.lastWarScore.declareWarThreshold}${relation.warPreventedUntilUtc ? ', impedida' : ''})`
+              : relation.state).join(', ')
             : 'sem relações',
         })),
       })),

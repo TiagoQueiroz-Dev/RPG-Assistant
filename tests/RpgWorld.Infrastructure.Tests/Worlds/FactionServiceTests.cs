@@ -93,6 +93,31 @@ public sealed class FactionServiceTests
         Assert.Equal(FactionHistoryEventTypes.Dissolved, dissolved.History[^1].EventType);
     }
 
+    [Fact]
+    public async Task Game_master_prevents_then_forces_war_through_application_service()
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var world = World.Create("War command", 8, 8);
+        var firstLeader = NpcActor.Create("First leader", world, world.PositionAt(1, 1), now);
+        var secondLeader = NpcActor.Create("Second leader", world, world.PositionAt(2, 1), now);
+        var repository = new FakeFactionRepository(
+            world, CreateTiles(world, (1, 1), (2, 1)), [firstLeader, secondLeader]);
+        var service = new FactionService(repository);
+        var first = await service.CreateAsync(new CreateFactionRequest(
+            world.Id, "First", FactionType.Kingdom, firstLeader.Id, 0m, 10m, now));
+        var second = await service.CreateAsync(new CreateFactionRequest(
+            world.Id, "Second", FactionType.Kingdom, secondLeader.Id, 0m, 10m, now));
+
+        var prevented = await service.PreventWarAsync(
+            first.FactionId, second.FactionId, now.AddDays(1), "Hold the conflict.", now.AddHours(1));
+        Assert.Equal(now.AddDays(1), Assert.Single(prevented.Relations).WarPreventedUntilUtc);
+
+        var forced = await service.ForceWarAsync(
+            first.FactionId, second.FactionId, "Begin the campaign.", now.AddHours(2));
+        Assert.Equal(FactionRelationKind.War.ToString(), Assert.Single(forced.Relations).State);
+        Assert.Equal(FactionHistoryEventTypes.WarDeclared, forced.History[^1].EventType);
+    }
+
     private static Tile[] CreateTiles(World world, params (int X, int Y)[] positions) =>
         positions.Select(cell => world.CreateTile(
             world.PositionAt(cell.X, cell.Y), "grassland", Definitions, 0, 20m, 0.5m)).ToArray();

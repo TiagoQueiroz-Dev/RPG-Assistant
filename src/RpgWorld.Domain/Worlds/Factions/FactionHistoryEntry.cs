@@ -22,5 +22,8 @@ public static class FactionHistoryEventTypes
     public const string PowerChanged = "power-changed";
     public const string RelationChanged = "relation-changed";
     public const string DiplomaticStateChanged = "diplomatic-state-changed";
+    public const string WarPrevented = "war-prevented";
+    public const string WarPreventionLifted = "war-prevention-lifted";
+    public const string WarDeclared = "war-declared";
     public const string Dissolved = "dissolved";
 }

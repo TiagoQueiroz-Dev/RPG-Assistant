@@ -21,6 +21,7 @@ using RpgWorld.Application.Worlds.Cities;
 using RpgWorld.Simulation.Worlds.Economy;
 using RpgWorld.Application.Worlds.Factions;
 using RpgWorld.Domain.Worlds.Factions;
+using RpgWorld.Simulation.Worlds.Factions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,7 +42,8 @@ builder.Services.AddSimulation(
                 entry => TimeSpan.Parse(entry.Value!, CultureInfo.InvariantCulture),
                 StringComparer.OrdinalIgnoreCase)
     },
-    cityEconomyOptions: builder.Configuration.GetSection("CityEconomy").Get<CityEconomyOptions>());
+    cityEconomyOptions: builder.Configuration.GetSection("CityEconomy").Get<CityEconomyOptions>(),
+    warDeclarationOptions: builder.Configuration.GetSection("WarDeclaration").Get<WarDeclarationOptions>());
 var frontendOrigins = builder.Configuration
     .GetSection("Frontend:AllowedOrigins")
     .GetChildren()
@@ -350,6 +352,54 @@ app.MapPost(
         { return Results.BadRequest(new { error = exception.Message }); }
     });
 
+app.MapPost(
+    "/api/worlds/{worldId:guid}/factions/{factionId:guid}/wars/{targetFactionId:guid}/force",
+    async (HttpContext httpContext, Guid worldId, Guid factionId, Guid targetFactionId, FactionReasonApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+            if (faction.WorldId != worldId) return Results.BadRequest(new { error = "Faction does not belong to this world." });
+            return Results.Ok(await service.ForceWarAsync(factionId, targetFactionId, body.Reason, body.OccurredAtUtc, cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/factions/{factionId:guid}/wars/{targetFactionId:guid}/prevent",
+    async (HttpContext httpContext, Guid worldId, Guid factionId, Guid targetFactionId, PreventFactionWarApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+            if (faction.WorldId != worldId) return Results.BadRequest(new { error = "Faction does not belong to this world." });
+            return Results.Ok(await service.PreventWarAsync(factionId, targetFactionId, body.PreventedUntilUtc, body.Reason, body.OccurredAtUtc, cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/factions/{factionId:guid}/wars/{targetFactionId:guid}/allow",
+    async (HttpContext httpContext, Guid worldId, Guid factionId, Guid targetFactionId, FactionReasonApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+            if (faction.WorldId != worldId) return Results.BadRequest(new { error = "Faction does not belong to this world." });
+            return Results.Ok(await service.AllowWarAsync(factionId, targetFactionId, body.Reason, body.OccurredAtUtc, cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
 app.MapPost("/worlds/import", ImportWorldAsync)
     .DisableAntiforgery()
     .WithName("ImportWorld");
@@ -644,6 +694,7 @@ record CreateFactionApiRequest(
 
 record FactionOccurredAtApiRequest(DateTimeOffset OccurredAtUtc);
 record FactionReasonApiRequest(string Reason, DateTimeOffset OccurredAtUtc);
+record PreventFactionWarApiRequest(DateTimeOffset PreventedUntilUtc, string Reason, DateTimeOffset OccurredAtUtc);
 record ChangeFactionLeaderApiRequest(Guid NewLeaderActorId, string Reason, DateTimeOffset OccurredAtUtc);
 record AssociateFactionCityApiRequest(bool ClaimCityTerritory, DateTimeOffset OccurredAtUtc);
 record AdjustFactionWealthApiRequest(decimal Delta, string Reason, DateTimeOffset OccurredAtUtc);

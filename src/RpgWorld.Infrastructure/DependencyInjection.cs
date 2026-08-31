@@ -71,6 +71,7 @@ public static class DependencyInjection
         services.AddScoped<ICityEconomyRepository, EfCityEconomyRepository>();
         services.AddScoped<ICityService, CityService>();
         services.AddScoped<IFactionRepository, EfFactionRepository>();
+        services.AddScoped<IFactionWarRepository, EfFactionRepository>();
         services.AddScoped<IFactionService, FactionService>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();
         effectiveNpcMemoryOptions.Validate();

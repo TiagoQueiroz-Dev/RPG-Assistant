@@ -72,7 +72,10 @@ public sealed record FactionRelation
         DateTimeOffset updatedAtUtc,
         int tension = 0,
         bool isVassal = false,
-        IReadOnlyList<FactionRelationChange>? history = null)
+        IReadOnlyList<FactionRelationChange>? history = null,
+        FactionWarScore? lastWarScore = null,
+        DateTimeOffset? warPreventedUntilUtc = null,
+        string? warPreventionReason = null)
     {
         if (targetFactionId == Guid.Empty) throw new ArgumentException("Target faction is required.", nameof(targetFactionId));
         if (!Enum.IsDefined(kind)) throw new ArgumentOutOfRangeException(nameof(kind));
@@ -85,6 +88,9 @@ public sealed record FactionRelation
         IsVassal = isVassal;
         UpdatedAtUtc = updatedAtUtc.ToUniversalTime();
         History = (history ?? []).TakeLast(MaximumHistoryEntries).ToArray();
+        LastWarScore = lastWarScore;
+        WarPreventedUntilUtc = warPreventedUntilUtc?.ToUniversalTime();
+        WarPreventionReason = warPreventionReason;
     }
 
     public Guid TargetFactionId { get; init; }
@@ -95,6 +101,9 @@ public sealed record FactionRelation
     public bool IsVassal { get; init; }
     public DateTimeOffset UpdatedAtUtc { get; init; }
     public IReadOnlyList<FactionRelationChange> History { get; init; }
+    public FactionWarScore? LastWarScore { get; init; }
+    public DateTimeOffset? WarPreventedUntilUtc { get; init; }
+    public string? WarPreventionReason { get; init; }
 
     public static FactionRelation Neutral(Guid targetFactionId, DateTimeOffset occurredAtUtc) =>
         new(targetFactionId, FactionRelationKind.Neutral, 0, occurredAtUtc);
@@ -115,8 +124,45 @@ public sealed record FactionRelation
             Kind, state, modifier.SourceEventId, instant);
         return new FactionRelation(
             TargetFactionId, state, affinity, instant, tension, isVassal,
-            History.Append(change).TakeLast(MaximumHistoryEntries).ToArray());
+            History.Append(change).TakeLast(MaximumHistoryEntries).ToArray(),
+            LastWarScore, WarPreventedUntilUtc, WarPreventionReason);
     }
+
+    public FactionRelation RecordWarScore(FactionWarScore score)
+    {
+        ArgumentNullException.ThrowIfNull(score);
+        if (score.EvaluatedAtUtc.ToUniversalTime() < UpdatedAtUtc)
+            throw new ArgumentOutOfRangeException(nameof(score), "War score cannot predate the diplomatic relation.");
+        return new FactionRelation(
+            TargetFactionId, Kind, Score, score.EvaluatedAtUtc, Tension, IsVassal, History,
+            score, WarPreventedUntilUtc, WarPreventionReason);
+    }
+
+    public FactionRelation PreventWar(DateTimeOffset preventedUntilUtc, string reason, DateTimeOffset occurredAtUtc)
+    {
+        var instant = occurredAtUtc.ToUniversalTime();
+        if (instant < UpdatedAtUtc)
+            throw new ArgumentOutOfRangeException(nameof(occurredAtUtc), "Diplomatic relation time cannot move backwards.");
+        var until = preventedUntilUtc.ToUniversalTime();
+        if (until <= instant) throw new ArgumentOutOfRangeException(nameof(preventedUntilUtc));
+        if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("Prevention reason is required.", nameof(reason));
+        return new FactionRelation(
+            TargetFactionId, Kind, Score, instant, Tension, IsVassal, History,
+            LastWarScore, until, reason.Trim());
+    }
+
+    public FactionRelation AllowWar(DateTimeOffset occurredAtUtc)
+    {
+        var instant = occurredAtUtc.ToUniversalTime();
+        if (instant < UpdatedAtUtc)
+            throw new ArgumentOutOfRangeException(nameof(occurredAtUtc), "Diplomatic relation time cannot move backwards.");
+        return new FactionRelation(
+            TargetFactionId, Kind, Score, instant, Tension, IsVassal, History,
+            LastWarScore, null, null);
+    }
+
+    public bool IsWarPreventedAt(DateTimeOffset occurredAtUtc) =>
+        WarPreventedUntilUtc is { } until && occurredAtUtc.ToUniversalTime() < until;
 
     public static FactionRelationKind ResolveState(int affinity, int tension)
     {

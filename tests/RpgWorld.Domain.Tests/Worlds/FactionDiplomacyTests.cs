@@ -105,6 +105,30 @@ public sealed class FactionDiplomacyTests
         Assert.False(relation.IsVassal);
     }
 
+    [Fact]
+    public void Game_master_can_prevent_autonomous_war_and_force_it_when_required()
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Controlled war", 8, 8);
+        var faction = CreateFaction(world, "First", now);
+        var target = CreateFaction(world, "Second", now);
+        var score = new FactionWarScore(
+            new FactionWarFactors(100m, 100m, 100m, 100m, 100m), 100m, 65m, now.AddHours(1));
+        faction.ClearDomainEvents();
+
+        faction.PreventWar(target.Id, now.AddDays(1), "Campaign preparation.", now.AddHours(1));
+        Assert.False(faction.DeclareWar(target.Id, score, "Autonomous escalation.", false, now.AddHours(2)));
+        Assert.NotEqual(FactionRelationKind.War, faction.Relations[target.Id].Kind);
+
+        Assert.True(faction.DeclareWar(
+            target.Id, score with { EvaluatedAtUtc = now.AddHours(2) }, "The GM starts the war.", true, now.AddHours(2)));
+        Assert.Equal(FactionRelationKind.War, faction.Relations[target.Id].Kind);
+        var warEvent = Assert.Single(faction.DomainEvents.OfType<FactionWarDeclaredEvent>());
+        Assert.True(warEvent.ForcedByGameMaster);
+        Assert.Equal(100m, warEvent.WarScore.Total);
+        Assert.Equal(FactionHistoryEventTypes.WarDeclared, faction.History[^1].EventType);
+    }
+
     private static Faction CreateFaction(World world, string name, DateTimeOffset now) =>
         Faction.Create(world, name, FactionType.Kingdom, Guid.NewGuid(), 0m, 0m, now);
 }
