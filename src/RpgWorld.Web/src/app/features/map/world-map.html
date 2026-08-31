@@ -11,6 +11,11 @@
       <button type="button" class="fit-button" (click)="resetView()">Enquadrar</button>
     </div>
   </header>
+  <nav class="layer-controls" aria-label="Modos de visualizaÃ§Ã£o do mapa">
+    @for (mode of layerModes; track mode) {
+      <button type="button" [class.active]="layerMode() === mode" (click)="selectLayer(mode)">{{ mode }}</button>
+    }
+  </nav>
 
   <div class="map-viewport">
     <canvas
@@ -58,8 +63,8 @@
     </div>
   </div>
 
-  <footer class="map-legend" aria-label="Legenda de biomas">
-    @for (item of legend; track item.code) {
+  <footer class="map-legend" aria-label="Legenda da camada {{ layerMode() }}">
+    @for (item of legend(); track item.code) {
       <span><i [style.background]="item.color"></i>{{ item.code }}</span>
     }
   </footer>

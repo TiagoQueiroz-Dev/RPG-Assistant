@@ -69,6 +69,31 @@
   font-size: 0.75rem;
 }
 
+.layer-controls {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.65rem 1.2rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.layer-controls button {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.68rem;
+}
+
+.layer-controls button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(208, 166, 87, 0.1);
+}
+
 .map-viewport {
   position: relative;
   height: clamp(360px, 58vh, 620px);

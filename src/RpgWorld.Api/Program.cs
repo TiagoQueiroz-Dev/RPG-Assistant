@@ -216,6 +216,24 @@ app.MapGet(
     });
 
 app.MapGet(
+    "/api/worlds/{worldId:guid}/map/layers/{mode}",
+    async (HttpContext httpContext, Guid worldId, string mode, int? minX, int? minY, int? maxX, int? maxY,
+        IWorldMapLayerService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        if (!Enum.TryParse<WorldMapLayerMode>(mode, true, out var layerMode))
+            return Results.BadRequest(new { error = "Unknown map layer mode." });
+        try
+        {
+            return Results.Ok(await service.LoadAsync(new WorldMapLayerQuery(
+                worldId, layerMode, minX, minY, maxX, maxY), cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or OverflowException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapGet(
     "/api/factions/{factionId:guid}",
     async (Guid factionId, IFactionService service, CancellationToken cancellationToken) =>
         await service.GetAsync(factionId, cancellationToken) is { } faction

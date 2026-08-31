@@ -42,3 +42,27 @@ export interface WorldMapOverlay {
   readonly label: string;
   readonly color?: string;
 }
+
+export type WorldMapLayerMode =
+  | 'Normal' | 'Political' | 'Population' | 'Economy' | 'Resources' | 'Military'
+  | 'Religion' | 'Danger' | 'Biome' | 'Temperature' | 'Faction';
+
+export interface WorldMapLayerView {
+  readonly worldId: string;
+  readonly mode: WorldMapLayerMode;
+  readonly generatedAtUtc: string;
+  readonly cells: readonly {
+    readonly x: number;
+    readonly y: number;
+    readonly intensity: number;
+    readonly label: string;
+    readonly color: string;
+    readonly entityId: string | null;
+  }[];
+  readonly legend: readonly {
+    readonly label: string;
+    readonly color: string;
+    readonly minimum: number | null;
+    readonly maximum: number | null;
+  }[];
+}

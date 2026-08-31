@@ -1090,6 +1090,7 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         player.JoinFaction(guild.Id, now);
         army.ApplyRelationModifier(guild.Id, new FactionRelationModifier(
             FactionRelationModifierSource.Event, "War for inspector.", tensionDelta: 80), now.AddMinutes(1));
+        army.ClaimTerritory(world, [world.PositionAt(4, 4)], now.AddMinutes(1));
         var city = City.Create(world, "Capital", world.PositionAt(3, 3), [world.PositionAt(3, 3)],
             25, 200m, now, army.Id);
         var tile = world.CreateTile(world.PositionAt(4, 4), "temperate", TestDefinitions, 0, 20m, 0.5m);
@@ -1120,6 +1121,19 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal($"/api/actors/{npc.Id}/inspector", npcEntity.DetailPath);
         Assert.Equal(2, secondChunkPage.TotalEntityCount);
         Assert.Equal(1, Assert.Single(secondChunkPage.Entities).RegionX);
+
+        var layerRepository = new EfWorldMapLayerRepository(context, TimeProvider.System);
+        var populationLayer = await layerRepository.LoadAsync(new WorldMapLayerQuery(world.Id, WorldMapLayerMode.Population));
+        var economyLayer = await layerRepository.LoadAsync(new WorldMapLayerQuery(world.Id, WorldMapLayerMode.Economy));
+        var resourceLayer = await layerRepository.LoadAsync(new WorldMapLayerQuery(world.Id, WorldMapLayerMode.Resources));
+        var militaryLayer = await layerRepository.LoadAsync(new WorldMapLayerQuery(world.Id, WorldMapLayerMode.Military));
+        var temperatureLayer = await layerRepository.LoadAsync(new WorldMapLayerQuery(world.Id, WorldMapLayerMode.Temperature));
+
+        Assert.Equal(1m, Assert.Single(populationLayer!.Cells).Intensity);
+        Assert.Equal(1m, Assert.Single(economyLayer!.Cells).Intensity);
+        Assert.Equal(resource.Id, Assert.Single(resourceLayer!.Cells).EntityId);
+        Assert.Equal(army.Id, Assert.Single(militaryLayer!.Cells).EntityId);
+        Assert.Contains("°C", Assert.Single(temperatureLayer!.Cells).Label);
     }
 
     [Theory]

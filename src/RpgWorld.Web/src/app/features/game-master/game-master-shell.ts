@@ -289,7 +289,10 @@ export class GameMasterShell implements OnDestroy {
     this.stopRealtimeUpdates = this.realtime.onWorldUpdated(message => {
       if (message.worldId !== worldId) return;
       if (this.realtimeRefresh) clearTimeout(this.realtimeRefresh);
-      this.realtimeRefresh = setTimeout(() => this.loadInspector(worldId), 250);
+      this.realtimeRefresh = setTimeout(() => {
+        this.loadInspector(worldId);
+        this.classificationRevision.update(value => value + 1);
+      }, 250);
     });
     void this.realtime.joinGameMaster(worldId).catch(() => undefined);
   }

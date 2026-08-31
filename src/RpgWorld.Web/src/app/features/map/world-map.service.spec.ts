@@ -12,4 +12,15 @@ describe('WorldMapService', () => {
 
     expect(api.get).toHaveBeenCalledWith('worlds/demo%20world/map');
   });
+
+  it('loads only the selected analytical layer on demand', () => {
+    const api = { get: vi.fn(() => of({})) };
+    TestBed.configureTestingModule({ providers: [{ provide: ApiClient, useValue: api }] });
+
+    TestBed.inject(WorldMapService).loadLayer('world-id', 'Population', 32, 16).subscribe();
+
+    expect(api.get).toHaveBeenCalledWith(
+      'worlds/world-id/map/layers/Population?minX=0&minY=0&maxX=31&maxY=15',
+    );
+  });
 });

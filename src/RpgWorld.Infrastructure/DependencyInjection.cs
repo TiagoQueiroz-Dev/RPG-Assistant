@@ -87,6 +87,8 @@ public static class DependencyInjection
         services.AddScoped<IDomainEventHandler<WorldConsequenceAppliedEvent>, FactionEconomyEscalationHandler>();
         services.AddScoped<IWorldAdminRepository, EfWorldAdminRepository>();
         services.AddScoped<IWorldAdminService, WorldAdminService>();
+        services.AddScoped<IWorldMapLayerRepository, EfWorldMapLayerRepository>();
+        services.AddScoped<IWorldMapLayerService, WorldMapLayerService>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();
         effectiveNpcMemoryOptions.Validate();
         services.AddSingleton(effectiveNpcMemoryOptions);

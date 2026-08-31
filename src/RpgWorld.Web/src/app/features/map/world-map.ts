@@ -20,7 +20,7 @@ import {
   worldToScreen,
   zoomAt,
 } from './map-transform';
-import { WorldMapOverlay, WorldMapTileView, WorldMapView } from './models/world-map-view';
+import { WorldMapLayerMode, WorldMapLayerView, WorldMapOverlay, WorldMapTileView, WorldMapView } from './models/world-map-view';
 import { WorldMapService } from './world-map.service';
 
 interface DragState {
@@ -71,6 +71,7 @@ export class WorldMap {
   private readonly tileIndex = new Map<string, WorldMapTileView>();
   private resizeObserver?: ResizeObserver;
   private mapSubscription?: Subscription;
+  private layerSubscription?: Subscription;
   private drag?: DragState;
   private ready = false;
   private renderedWorldId?: string;
@@ -79,9 +80,14 @@ export class WorldMap {
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
   protected readonly selectedTile = signal<WorldMapTileView | null>(null);
+  protected readonly layerMode = signal<WorldMapLayerMode>('Normal');
+  protected readonly layer = signal<WorldMapLayerView | null>(null);
+  protected readonly layerModes: readonly WorldMapLayerMode[] =
+    ['Normal', 'Political', 'Population', 'Economy', 'Resources', 'Military', 'Religion', 'Danger', 'Biome', 'Temperature', 'Faction'];
   protected readonly hoveredPosition = signal<{ x: number; y: number } | null>(null);
   protected readonly zoomPercent = computed(() => Math.round(this.transform().scale * 100));
-  protected readonly legend = Object.entries(BIOME_COLORS).map(([code, color]) => ({ code, color }));
+  protected readonly legend = computed(() => this.layer()?.legend.map(item => ({ code: item.label, color: item.color }))
+    ?? Object.entries(BIOME_COLORS).map(([code, color]) => ({ code, color })));
 
   constructor() {
     afterNextRender(() => this.initializeCanvas());
@@ -89,18 +95,21 @@ export class WorldMap {
     effect(() => {
       const worldId = this.worldId();
       this.refreshToken();
-      this.overlays();
 
       if (this.ready) {
         this.loadMap(worldId);
       }
+    });
 
+    effect(() => {
+      this.overlays();
       this.scheduleDraw();
     });
 
     this.destroyRef.onDestroy(() => {
       this.resizeObserver?.disconnect();
       this.mapSubscription?.unsubscribe();
+      this.layerSubscription?.unsubscribe();
     });
   }
 
@@ -186,6 +195,13 @@ export class WorldMap {
     this.fitMap();
   }
 
+  protected selectLayer(mode: WorldMapLayerMode): void {
+    if (mode === this.layerMode()) return;
+    this.layerMode.set(mode);
+    const map = this.map();
+    if (map) this.loadLayer(map);
+  }
+
   protected onKeyDown(event: KeyboardEvent): void {
     const panDistance = 36;
     const movement: Readonly<Record<string, readonly [number, number]>> = {
@@ -226,6 +242,7 @@ export class WorldMap {
   }
 
   private loadMap(worldId: string): void {
+    const preserveViewport = this.renderedWorldId === worldId;
     this.renderedWorldId = worldId;
     this.mapSubscription?.unsubscribe();
     this.loading.set(true);
@@ -243,11 +260,34 @@ export class WorldMap {
         }
 
         this.loading.set(false);
-        this.fitMap();
+        this.loadLayer(map);
+        if (preserveViewport) this.scheduleDraw();
+        else this.fitMap();
       },
       error: () => {
         this.loading.set(false);
         this.error.set('Não foi possível carregar o mapa deste mundo.');
+        this.scheduleDraw();
+      },
+    });
+  }
+
+  private loadLayer(map: WorldMapView): void {
+    this.layerSubscription?.unsubscribe();
+    const mode = this.layerMode();
+    if (mode === 'Normal') {
+      this.layer.set(null);
+      this.scheduleDraw();
+      return;
+    }
+    this.layerSubscription = this.mapService.loadLayer(map.worldId, mode, map.width, map.height).subscribe({
+      next: layer => {
+        if (this.layerMode() !== mode) return;
+        this.layer.set(layer);
+        this.scheduleDraw();
+      },
+      error: () => {
+        this.layer.set(null);
         this.scheduleDraw();
       },
     });
@@ -382,6 +422,19 @@ export class WorldMap {
         chunk.width * renderedTileSize,
         chunk.height * renderedTileSize,
       );
+    }
+
+    const layer = this.layer();
+    if (layer) {
+      for (const cell of layer.cells) {
+        const screen = worldToScreen(cell, transform);
+        if (screen.x + renderedTileSize < 0 || screen.y + renderedTileSize < 0 || screen.x > width || screen.y > height) continue;
+        context.save();
+        context.globalAlpha = 0.25 + Math.min(1, Math.max(0, cell.intensity)) * 0.6;
+        context.fillStyle = cell.color;
+        context.fillRect(screen.x, screen.y, renderedTileSize + 0.5, renderedTileSize + 0.5);
+        context.restore();
+      }
     }
 
     const selected = this.selectedTile();
