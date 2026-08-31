@@ -217,5 +217,20 @@ public sealed class ResourceDeposit : AggregateRoot
         return Quantity - previous;
     }
 
+    public void AdjustQuantity(decimal delta, DateTimeOffset occurredAtUtc)
+    {
+        if (delta == 0m) throw new ArgumentOutOfRangeException(nameof(delta));
+        var instant = occurredAtUtc.ToUniversalTime();
+        if (instant < UpdatedAtUtc)
+            throw new ArgumentOutOfRangeException(nameof(occurredAtUtc), "Resource adjustment cannot move backwards in time.");
+        var next = checked(Quantity + delta);
+        if (next is < 0m || next > Capacity)
+            throw new ArgumentOutOfRangeException(nameof(delta), "Adjusted quantity must remain between zero and capacity.");
+        Quantity = next;
+        UpdatedAtUtc = instant;
+        LastRegeneratedAtUtc = instant;
+        AdvanceVersion();
+    }
+
     private void AdvanceVersion() => Version = checked(Version + 1);
 }

@@ -93,6 +93,22 @@ public sealed class ResourceDepositTests
         Assert.Equal(10m, deposit.Quantity);
     }
 
+    [Fact]
+    public void Administrative_adjustment_respects_capacity_and_event_time()
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var (world, tile) = CreateWorldAndTile();
+        var deposit = ResourceDeposit.SpawnOnTile(
+            world, tile, Definitions.ResolveResource("wood"), now, initialQuantity: 4m);
+
+        deposit.AdjustQuantity(3m, now.AddMinutes(1));
+
+        Assert.Equal(7m, deposit.Quantity);
+        Assert.Throws<ArgumentOutOfRangeException>(() => deposit.AdjustQuantity(4m, now.AddMinutes(2)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => deposit.AdjustQuantity(-8m, now.AddMinutes(2)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => deposit.AdjustQuantity(1m, now));
+    }
+
     private static (World World, Tile Tile) CreateWorldAndTile()
     {
         var world = World.Create("Resources", 8, 8);

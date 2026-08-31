@@ -24,6 +24,7 @@ using RpgWorld.Application.Worlds.Cities;
 using RpgWorld.Application.Worlds.Factions;
 using RpgWorld.Application.Worlds.Events;
 using RpgWorld.Application.Worlds.Admin;
+using RpgWorld.Infrastructure.Worlds.Admin;
 
 namespace RpgWorld.Infrastructure;
 
@@ -89,6 +90,7 @@ public static class DependencyInjection
         services.AddScoped<IWorldAdminService, WorldAdminService>();
         services.AddScoped<IWorldMapLayerRepository, EfWorldMapLayerRepository>();
         services.AddScoped<IWorldMapLayerService, WorldMapLayerService>();
+        services.AddScoped<IGameMasterCommandService, GameMasterCommandService>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();
         effectiveNpcMemoryOptions.Validate();
         services.AddSingleton(effectiveNpcMemoryOptions);

@@ -8,6 +8,74 @@
   grid-column: 1 / -1;
 }
 
+.command-console {
+  grid-column: 1 / -1;
+}
+
+.command-console > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.command-console > header small {
+  color: var(--success);
+}
+
+.command-console > header small.error {
+  color: var(--danger);
+}
+
+.command-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.command-grid form {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(10, 15, 16, 0.48);
+}
+
+.command-grid form > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.command-grid input,
+.command-grid select,
+.command-grid textarea,
+.command-grid button {
+  width: 100%;
+  min-height: 36px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--text);
+  background: rgba(7, 11, 12, 0.9);
+  font: inherit;
+}
+
+.command-grid textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+
+.command-grid button {
+  color: var(--gold);
+}
+
+.command-grid button:disabled {
+  opacity: 0.55;
+}
+
 .import-panel {
   grid-column: 1 / -1;
   display: grid;
@@ -164,6 +232,10 @@
   }
 
   .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .command-grid {
     grid-template-columns: 1fr;
   }
 

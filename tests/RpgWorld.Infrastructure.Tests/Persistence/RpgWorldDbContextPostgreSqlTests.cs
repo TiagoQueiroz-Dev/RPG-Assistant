@@ -43,6 +43,8 @@ using RpgWorld.Application.Worlds.Events;
 using RpgWorld.Domain.Worlds.Events;
 using RpgWorld.Domain.Events;
 using RpgWorld.Application.Worlds.Admin;
+using RpgWorld.Application.Realtime;
+using RpgWorld.Infrastructure.Worlds.Admin;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -1347,6 +1349,56 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal(3m, restored.RealTimeMultiplier);
     }
 
+    [Fact]
+    public async Task Game_master_commands_create_move_adjust_and_emit_events_end_to_end()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var now = new DateTimeOffset(2035, 1, 2, 3, 0, 0, TimeSpan.Zero);
+        var world = World.Create("Directed world", 8, 8);
+        var origin = world.CreateTile(world.PositionAt(1, 1), "forest", DefaultWorldDefinitions.Catalog, 0, 20m, 0.5m);
+        var destination = world.CreateTile(world.PositionAt(2, 2), "forest", DefaultWorldDefinitions.Catalog, 0, 20m, 0.5m);
+        var resourceTile = world.CreateTile(world.PositionAt(3, 3), "forest", DefaultWorldDefinitions.Catalog, 0, 20m, 0.5m);
+        var deposit = ResourceDeposit.SpawnOnTile(
+            world, resourceTile, DefaultWorldDefinitions.Catalog.ResolveResource("wood"), now,
+            initialQuantity: 20m, capacity: 100m);
+        context.AddRange(world, origin, destination, resourceTile, deposit);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var publisher = new RecordingWorldUpdatePublisher();
+        var service = new GameMasterCommandService(
+            context, DefaultWorldDefinitions.Catalog, publisher, new FixedTimeProvider(now));
+
+        var created = await service.ExecuteAsync(world.Id, new GameMasterCommand(
+            GameMasterCommandType.CreateNpc, now.AddMinutes(1), Name: "Guide", X: 1, Y: 1));
+        await service.ExecuteAsync(world.Id, new GameMasterCommand(
+            GameMasterCommandType.MoveActor, now.AddMinutes(2), ActorId: created.EntityId, X: 2, Y: 2));
+        await service.ExecuteAsync(world.Id, new GameMasterCommand(
+            GameMasterCommandType.AdjustResource, now.AddMinutes(3), ResourceDepositId: deposit.Id,
+            ResourceQuantityDelta: 5m));
+        var authoredEvent = await service.ExecuteAsync(world.Id, new GameMasterCommand(
+            GameMasterCommandType.CreateEvent, now.AddMinutes(4), ActorId: created.EntityId,
+            X: 2, Y: 2, EventType: "story.omen", EventPayload: "{\"sign\":\"red-moon\"}"));
+        context.ChangeTracker.Clear();
+
+        var npc = await context.Actors.AsNoTracking().OfType<NpcActor>().SingleAsync(value => value.Id == created.EntityId);
+        var storedDeposit = await context.ResourceDeposits.AsNoTracking().SingleAsync(value => value.Id == deposit.Id);
+        var auditEvents = await context.WorldEvents.AsNoTracking().Where(value => value.WorldId == world.Id &&
+            value.Type.StartsWith("game-master.")).OrderBy(value => value.TimestampUtc).ToArrayAsync();
+        var storyEvent = await context.WorldEvents.AsNoTracking().SingleAsync(value => value.Id == authoredEvent.EntityId);
+
+        Assert.Equal((2, 2), (npc.X, npc.Y));
+        Assert.Equal(25m, storedDeposit.Quantity);
+        Assert.Equal(4, auditEvents.Length);
+        Assert.All(auditEvents, value => Assert.Contains("game-master-command", value.Payload));
+        Assert.Equal("story.omen", storyEvent.Type);
+        Assert.Equal(8, publisher.Messages.Count);
+        Assert.All(publisher.Messages, value => Assert.Equal("game-master-command", value.UpdateType));
+    }
+
     private static byte[] CreateImage(string format)
     {
         using var image = new Image<Rgba32>(64, 64, new Rgba32(30, 150, 60));
@@ -1360,5 +1412,33 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         };
         image.Save(stream, encoder);
         return stream.ToArray();
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset value) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => value;
+    }
+
+    private sealed class RecordingWorldUpdatePublisher : IWorldUpdatePublisher
+    {
+        public List<WorldUpdateMessage> Messages { get; } = [];
+
+        public Task PublishToWorldAsync(WorldUpdateMessage message, CancellationToken cancellationToken = default)
+        {
+            Messages.Add(message);
+            return Task.CompletedTask;
+        }
+
+        public Task PublishToChunkAsync(Guid chunkId, WorldUpdateMessage message, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task PublishToPlayerAsync(Guid playerId, WorldUpdateMessage message, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task PublishToGameMasterAsync(WorldUpdateMessage message, CancellationToken cancellationToken = default)
+        {
+            Messages.Add(message);
+            return Task.CompletedTask;
+        }
     }
 }

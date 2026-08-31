@@ -13,6 +13,7 @@ using RpgWorld.Simulation.Time;
 using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Application.Actors.Inspection;
+using RpgWorld.Application.Worlds.Admin;
 
 namespace RpgWorld.Api.Tests.WorldMaps;
 
@@ -87,6 +88,12 @@ public sealed class DemoWorldMapEndpointTests
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/events?page=1&pageSize=20"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/admin?entityType=chunks&page=1&pageSize=20"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/map/layers/Population"),
+            JsonRequest(HttpMethod.Post, $"/api/worlds/{worldId}/admin/commands", new
+            {
+                action = "CreateEvent",
+                eventType = "unauthorized",
+                eventPayload = "{}"
+            }),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/clock/ticks/1"),
             JsonRequest(HttpMethod.Post, $"/api/worlds/{worldId}/cities", new
             {
@@ -163,6 +170,30 @@ public sealed class DemoWorldMapEndpointTests
     }
 
     [Fact]
+    public async Task Game_master_command_accepts_matching_context_and_maps_typed_payload()
+    {
+        using var factory = new MapWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var worldId = Guid.NewGuid();
+        client.DefaultRequestHeaders.Add("X-Test-Game-Master-World", worldId.ToString());
+
+        using var response = await client.PostAsJsonAsync($"/api/worlds/{worldId}/admin/commands", new
+        {
+            action = "CreateNpc",
+            name = "Cartographer",
+            x = 4,
+            y = 6,
+            maximumHealth = 80
+        });
+
+        response.EnsureSuccessStatusCode();
+        var recorded = factory.Services.GetRequiredService<RecordingGameMasterCommandService>();
+        Assert.Equal(worldId, recorded.WorldId);
+        Assert.Equal(GameMasterCommandType.CreateNpc, recorded.Command?.Type);
+        Assert.Equal((4, 6, 80), (recorded.Command?.X, recorded.Command?.Y, recorded.Command?.MaximumHealth));
+    }
+
+    [Fact]
     public async Task Actor_move_endpoint_forwards_destination_to_shared_movement_service()
     {
         using var factory = new MapWebApplicationFactory();
@@ -232,6 +263,10 @@ public sealed class DemoWorldMapEndpointTests
                 services.AddSingleton<RecordingNpcInspectorService>();
                 services.AddSingleton<INpcInspectorService>(provider =>
                     provider.GetRequiredService<RecordingNpcInspectorService>());
+                services.RemoveAll<IGameMasterCommandService>();
+                services.AddSingleton<RecordingGameMasterCommandService>();
+                services.AddSingleton<IGameMasterCommandService>(provider =>
+                    provider.GetRequiredService<RecordingGameMasterCommandService>());
             });
         }
     }
@@ -362,5 +397,21 @@ public sealed class DemoWorldMapEndpointTests
                     null,
                     new Dictionary<string, string>())],
                 []));
+    }
+
+    private sealed class RecordingGameMasterCommandService : IGameMasterCommandService
+    {
+        public Guid? WorldId { get; private set; }
+        public GameMasterCommand? Command { get; private set; }
+
+        public Task<GameMasterCommandResult> ExecuteAsync(
+            Guid worldId, GameMasterCommand command, CancellationToken cancellationToken = default)
+        {
+            WorldId = worldId;
+            Command = command;
+            return Task.FromResult(new GameMasterCommandResult(
+                Guid.NewGuid(), worldId, command.Type.ToString(), Guid.NewGuid(),
+                DateTimeOffset.UnixEpoch, "recorded"));
+        }
     }
 }

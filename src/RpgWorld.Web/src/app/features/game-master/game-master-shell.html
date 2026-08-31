@@ -39,6 +39,74 @@
   <app-world-map class="map-region" [worldId]="world().worldId"
     [refreshToken]="classificationRevision()" (tileSelected)="handleMapTileSelected($event)" />
 
+  <article class="panel command-console" aria-labelledby="command-console-title">
+    <header>
+      <div>
+        <span class="eyebrow">Administração da realidade</span>
+        <h2 id="command-console-title">Ferramentas do mestre</h2>
+      </div>
+      <small [class.error]="commandState() === 'error'" role="status">{{ commandMessage() }}</small>
+    </header>
+    <div class="command-grid">
+      <form (submit)="submitCommand($event)">
+        <strong>Atores e criaturas</strong>
+        <select name="action" aria-label="Comando de ator">
+          <option value="CreateNpc">Criar NPC</option>
+          <option value="CreateCreature">Criar criatura</option>
+          <option value="MoveActor">Mover ator</option>
+          <option value="DeleteNpc">Excluir NPC</option>
+        </select>
+        <input name="name" placeholder="Nome (criação)" />
+        <input name="actorId" placeholder="ID do ator (mover/excluir)" />
+        <div><input name="x" type="number" min="0" placeholder="X" /><input name="y" type="number" min="0" placeholder="Y" /></div>
+        <input name="maximumHealth" type="number" min="1" placeholder="Vida máxima (padrão 100)" />
+        <input name="reason" placeholder="Motivo" />
+        <button type="submit" [disabled]="commandState() === 'running'">Executar</button>
+      </form>
+
+      <form (submit)="submitCommand($event)">
+        <strong>Mundo e narrativa</strong>
+        <select name="action" aria-label="Comando de mundo">
+          <option value="CreateCity">Criar cidade</option>
+          <option value="DestroyCity">Destruir cidade</option>
+          <option value="ChangeClimate">Mudar clima</option>
+          <option value="CreateEvent">Criar evento</option>
+        </select>
+        <input name="name" placeholder="Nome da cidade" />
+        <input name="cityId" placeholder="ID da cidade (destruir)" />
+        <div><input name="x" type="number" min="0" placeholder="X" /><input name="y" type="number" min="0" placeholder="Y" /></div>
+        <div><input name="initialPopulation" type="number" min="0" placeholder="População" /><input name="initialWealth" type="number" min="0" placeholder="Riqueza" /></div>
+        <div><input name="temperatureCelsius" type="number" min="-150" max="150" step="0.1" placeholder="°C" /><input name="humidity" type="number" min="0" max="1" step="0.01" placeholder="Umidade 0–1" /></div>
+        <input name="eventType" placeholder="Tipo do evento" />
+        <textarea name="eventPayload" placeholder='Payload JSON, ex.: {"presságio":"eclipse"}'></textarea>
+        <input name="reason" placeholder="Motivo" />
+        <button type="submit" [disabled]="commandState() === 'running'">Executar</button>
+      </form>
+
+      <form (submit)="submitCommand($event)">
+        <strong>Recursos</strong>
+        <input name="action" type="hidden" value="AdjustResource" />
+        <input name="resourceDepositId" placeholder="ID do depósito" required />
+        <input name="resourceQuantityDelta" type="number" step="0.01" placeholder="Variação (+/−)" required />
+        <button type="submit" [disabled]="commandState() === 'running'">Alterar recurso</button>
+      </form>
+
+      <form (submit)="submitCommand($event)">
+        <strong>Diplomacia</strong>
+        <select name="action" aria-label="Comando diplomático">
+          <option value="DeclareWar">Declarar guerra</option>
+          <option value="EndWar">Encerrar guerra</option>
+          <option value="ChangeFactionRelation">Alterar relação</option>
+        </select>
+        <input name="factionId" placeholder="ID da facção" required />
+        <input name="targetFactionId" placeholder="ID da facção-alvo" required />
+        <div><input name="affinityDelta" type="number" min="-200" max="200" placeholder="Afinidade Δ" /><input name="tensionDelta" type="number" min="-200" max="200" placeholder="Tensão Δ" /></div>
+        <input name="reason" placeholder="Motivo" required />
+        <button type="submit" [disabled]="commandState() === 'running'">Executar</button>
+      </form>
+    </div>
+  </article>
+
   <div class="classification-review">
     <div class="brush-tools" aria-label="Ferramentas de pintura do mapa">
       @for (brush of ['Forest', 'Water', 'Mountain', 'Desert', 'City']; track brush) {

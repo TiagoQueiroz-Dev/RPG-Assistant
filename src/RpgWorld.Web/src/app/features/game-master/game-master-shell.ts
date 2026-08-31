@@ -10,6 +10,7 @@ import { FactionService } from './faction.service';
 import { WorldEventService, WorldEventTimelineItem } from './world-event.service';
 import { WorldAdminService, WorldInspectorEntity, WorldInspectorView } from './world-admin.service';
 import { WorldRealtimeService } from '../../core/realtime/world-realtime.service';
+import { GameMasterCommand, GameMasterCommandService, GameMasterCommandType } from './game-master-command.service';
 
 @Component({
   selector: 'app-game-master-shell',
@@ -26,6 +27,7 @@ export class GameMasterShell implements OnDestroy {
   private readonly worldEvents = inject(WorldEventService);
   private readonly worldAdmin = inject(WorldAdminService);
   private readonly realtime = inject(WorldRealtimeService);
+  private readonly commands = inject(GameMasterCommandService);
   private stopRealtimeUpdates?: () => void;
   private realtimeRefresh?: ReturnType<typeof setTimeout>;
 
@@ -43,6 +45,8 @@ export class GameMasterShell implements OnDestroy {
   protected readonly selectedInspectorEntity = signal<WorldInspectorEntity | null>(null);
   protected readonly inspectorEntityType = signal('chunks');
   protected readonly inspectorFilters = signal<{ regionX?: number; regionY?: number; factionId?: string }>({});
+  protected readonly commandState = signal<'idle' | 'running' | 'completed' | 'error'>('idle');
+  protected readonly commandMessage = signal('Escolha uma ferramenta e informe os campos aplicáveis.');
 
   protected readonly world = signal<WorldAdminView>({
     worldId: 'demo',
@@ -187,6 +191,58 @@ export class GameMasterShell implements OnDestroy {
     this.loadInspector(this.world().worldId);
   }
 
+  protected submitCommand(event: SubmitEvent): void {
+    event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
+    const data = new FormData(formElement);
+    const action = this.formValue(data, 'action') as GameMasterCommandType;
+    const x = this.formNumber(data, 'x');
+    const y = this.formNumber(data, 'y');
+    const command: GameMasterCommand = {
+      action,
+      actorId: this.formValue(data, 'actorId'),
+      cityId: this.formValue(data, 'cityId'),
+      resourceDepositId: this.formValue(data, 'resourceDepositId'),
+      factionId: this.formValue(data, 'factionId'),
+      targetFactionId: this.formValue(data, 'targetFactionId'),
+      name: this.formValue(data, 'name'),
+      reason: this.formValue(data, 'reason'),
+      x,
+      y,
+      maximumHealth: this.formNumber(data, 'maximumHealth'),
+      initialPopulation: this.formNumber(data, 'initialPopulation'),
+      initialWealth: this.formNumber(data, 'initialWealth'),
+      territory: action === 'CreateCity' && x !== undefined && y !== undefined ? [{ x, y }] : undefined,
+      resourceQuantityDelta: this.formNumber(data, 'resourceQuantityDelta'),
+      temperatureCelsius: this.formNumber(data, 'temperatureCelsius'),
+      humidity: this.formNumber(data, 'humidity'),
+      eventType: this.formValue(data, 'eventType'),
+      eventPayload: this.formValue(data, 'eventPayload'),
+      affinityDelta: this.formNumber(data, 'affinityDelta'),
+      tensionDelta: this.formNumber(data, 'tensionDelta'),
+    };
+    const worldId = this.world().worldId;
+    if (!this.isGuid(worldId)) {
+      this.commandState.set('error');
+      this.commandMessage.set('Importe ou abra um mundo persistido antes de executar comandos.');
+      return;
+    }
+    this.commandState.set('running');
+    this.commandMessage.set(`Executando ${action}…`);
+    this.commands.execute(worldId, command).subscribe({
+      next: result => {
+        this.commandState.set('completed');
+        this.commandMessage.set(result.summary);
+        this.refreshAdministrativeViews(worldId);
+        formElement.reset();
+      },
+      error: error => {
+        this.commandState.set('error');
+        this.commandMessage.set(error?.error?.error ?? 'O comando foi rejeitado pelo servidor.');
+      },
+    });
+  }
+
   ngOnDestroy(): void {
     this.stopRealtimeUpdates?.();
     if (this.realtimeRefresh) clearTimeout(this.realtimeRefresh);
@@ -223,6 +279,24 @@ export class GameMasterShell implements OnDestroy {
 
   private isGuid(value: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  private formValue(data: FormData, name: string): string | undefined {
+    const value = data.get(name)?.toString().trim();
+    return value || undefined;
+  }
+
+  private formNumber(data: FormData, name: string): number | undefined {
+    const value = this.formValue(data, name);
+    return value === undefined ? undefined : Number(value);
+  }
+
+  private refreshAdministrativeViews(worldId: string): void {
+    this.loadCities(worldId);
+    this.loadFactions(worldId);
+    this.loadTimeline(worldId);
+    this.loadInspector(worldId);
+    this.classificationRevision.update(value => value + 1);
   }
 
   private loadCities(worldId: string): void {

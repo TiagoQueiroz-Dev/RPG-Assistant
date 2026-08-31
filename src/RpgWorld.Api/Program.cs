@@ -24,6 +24,7 @@ using RpgWorld.Domain.Worlds.Factions;
 using RpgWorld.Simulation.Worlds.Factions;
 using RpgWorld.Application.Worlds.Events;
 using RpgWorld.Application.Worlds.Admin;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -230,6 +231,46 @@ app.MapGet(
         }
         catch (KeyNotFoundException) { return Results.NotFound(); }
         catch (Exception exception) when (exception is ArgumentException or OverflowException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/admin/commands",
+    async (HttpContext httpContext, Guid worldId, GameMasterCommandApiRequest body,
+        IGameMasterCommandService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        if (!Enum.TryParse<GameMasterCommandType>(body.Action, true, out var commandType))
+            return Results.BadRequest(new { error = "Unknown game-master command." });
+        try
+        {
+            return Results.Ok(await service.ExecuteAsync(worldId, new GameMasterCommand(
+                commandType,
+                body.OccurredAtUtc,
+                body.ActorId,
+                body.CityId,
+                body.ResourceDepositId,
+                body.FactionId,
+                body.TargetFactionId,
+                body.Name,
+                body.Reason,
+                body.X,
+                body.Y,
+                body.MaximumHealth,
+                body.InitialPopulation,
+                body.InitialWealth,
+                body.Territory?.Select(value => new GameMasterCommandPosition(value.X, value.Y)).ToArray(),
+                body.ResourceQuantityDelta,
+                body.TemperatureCelsius,
+                body.Humidity,
+                body.EventType,
+                body.EventPayload,
+                body.AffinityDelta,
+                body.TensionDelta,
+                body.Vassalage), cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or OverflowException or JsonException)
         { return Results.BadRequest(new { error = exception.Message }); }
     });
 
@@ -765,6 +806,31 @@ record FactionRelationModifierApiRequest(
     Guid? SourceEventId,
     bool? Vassalage,
     DateTimeOffset OccurredAtUtc);
+
+record GameMasterCommandApiRequest(
+    string Action,
+    DateTimeOffset? OccurredAtUtc,
+    Guid? ActorId,
+    Guid? CityId,
+    Guid? ResourceDepositId,
+    Guid? FactionId,
+    Guid? TargetFactionId,
+    string? Name,
+    string? Reason,
+    int? X,
+    int? Y,
+    int? MaximumHealth,
+    int? InitialPopulation,
+    decimal? InitialWealth,
+    CityTerritoryApiPosition[]? Territory,
+    decimal? ResourceQuantityDelta,
+    decimal? TemperatureCelsius,
+    decimal? Humidity,
+    string? EventType,
+    string? EventPayload,
+    int? AffinityDelta,
+    int? TensionDelta,
+    bool? Vassalage);
 
 public partial class Program
 {
