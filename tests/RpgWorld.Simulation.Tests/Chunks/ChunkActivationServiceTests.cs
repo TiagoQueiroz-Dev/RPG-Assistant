@@ -98,6 +98,48 @@ public sealed class ChunkActivationServiceTests
         Assert.Equal(structureId, reloadedChunk!.Tiles[0].StructureId);
     }
 
+    [Fact]
+    public async Task Shared_registry_keeps_active_chunk_occupants_consistent_across_scopes()
+    {
+        var world = World.Create("Shared", 64, 32);
+        var repository = InMemoryWorldMapRepository.Create(world);
+        var registry = new ActiveChunkRegistry();
+        var cache = new RecordingCacheService();
+        var dispatcher = new RecordingEventDispatcher();
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        using var activationScope = new ChunkActivationService(
+            repository,
+            cache,
+            dispatcher,
+            new ChunkActivationOptions(playerRadius: 1),
+            time,
+            regionSimulationService: null,
+            registry);
+        await activationScope.SynchronizeAsync(world, [world.PositionAt(0, 0)]);
+        var actorId = Guid.NewGuid();
+        Assert.True(activationScope.TryGetActiveChunk(world.Id, new ChunkCoordinate(0, 0), out var origin));
+        Assert.True(activationScope.TryGetActiveChunk(world.Id, new ChunkCoordinate(1, 0), out var destination));
+        origin!.Tiles[0].AddOccupant(actorId);
+
+        using var movementScope = new ChunkActivationService(
+            repository,
+            cache,
+            dispatcher,
+            new ChunkActivationOptions(playerRadius: 1),
+            time,
+            regionSimulationService: null,
+            registry);
+        await movementScope.ApplyActorMovementAsync(
+            world.Id,
+            actorId,
+            origin.Tiles[0].Position,
+            destination!.Tiles[0].Position);
+
+        Assert.DoesNotContain(actorId, origin.Tiles[0].OccupantIds);
+        Assert.Contains(actorId, destination.Tiles[0].OccupantIds);
+        registry.Dispose();
+    }
+
     private sealed class InMemoryWorldMapRepository : IWorldMapRepository
     {
         private readonly World _world;

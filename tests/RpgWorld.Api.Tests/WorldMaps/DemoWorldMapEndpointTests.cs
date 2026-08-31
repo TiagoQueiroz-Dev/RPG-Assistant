@@ -10,6 +10,8 @@ using System.Security.Claims;
 using RpgWorld.Api.Realtime;
 using RpgWorld.Api.WorldMaps;
 using RpgWorld.Simulation.Time;
+using RpgWorld.Application.Actors.Movement;
+using RpgWorld.Domain.Worlds;
 
 namespace RpgWorld.Api.Tests.WorldMaps;
 
@@ -115,6 +117,23 @@ public sealed class DemoWorldMapEndpointTests
             factory.Services.GetRequiredService<RecordingTimeCommandService>().PausedWorldId);
     }
 
+    [Fact]
+    public async Task Actor_move_endpoint_forwards_destination_to_shared_movement_service()
+    {
+        using var factory = new MapWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var actorId = Guid.NewGuid();
+
+        using var response = await client.PostAsJsonAsync(
+            $"/api/actors/{actorId}/move",
+            new { destinationX = 7, destinationY = 9 });
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(
+            new ActorMoveRequest(actorId, 7, 9),
+            factory.Services.GetRequiredService<RecordingActorMovementService>().LastRequest);
+    }
+
     private static HttpRequestMessage JsonRequest(HttpMethod method, string uri, object body) =>
         new(method, uri) { Content = JsonContent.Create(body) };
 
@@ -139,6 +158,10 @@ public sealed class DemoWorldMapEndpointTests
                 services.AddSingleton<IWorldTimeCommandService>(provider =>
                     provider.GetRequiredService<RecordingTimeCommandService>());
                 services.AddSingleton<IStartupFilter, GameMasterClaimStartupFilter>();
+                services.RemoveAll<IActorMovementService>();
+                services.AddSingleton<RecordingActorMovementService>();
+                services.AddSingleton<IActorMovementService>(provider =>
+                    provider.GetRequiredService<RecordingActorMovementService>());
             });
         }
     }
@@ -195,5 +218,28 @@ public sealed class DemoWorldMapEndpointTests
 
         private static WorldTimeCommandResult Result(Guid worldId, bool running, string command) =>
             new(worldId, running, DateTimeOffset.UnixEpoch, TimeSpan.FromMinutes(1), 1m, command);
+    }
+
+    private sealed class RecordingActorMovementService : IActorMovementService
+    {
+        public ActorMoveRequest? LastRequest { get; private set; }
+
+        public Task<ActorMoveResult> MoveAsync(
+            ActorMoveRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            LastRequest = request;
+            var worldId = Guid.NewGuid();
+            var origin = new Position(worldId, 6, 9);
+            var destination = new Position(worldId, request.DestinationX, request.DestinationY);
+            return Task.FromResult(new ActorMoveResult(
+                request.ActorId,
+                origin,
+                destination,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                false,
+                1m));
+        }
     }
 }

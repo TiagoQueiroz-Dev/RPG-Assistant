@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using RpgWorld.Application.Caching;
 using RpgWorld.Application.Events;
 using RpgWorld.Application.Worlds;
@@ -14,13 +13,14 @@ public sealed class ChunkActivationService(
     IDomainEventDispatcher eventDispatcher,
     ChunkActivationOptions options,
     TimeProvider timeProvider,
-    IRegionSimulationService? regionSimulationService = null) : IChunkActivationService, IDisposable
+    IRegionSimulationService? regionSimulationService = null,
+    ActiveChunkRegistry? activeChunkRegistry = null) : IChunkActivationService, IDisposable
 {
-    private readonly ConcurrentDictionary<ChunkKey, ActiveChunk> _activeChunks = new();
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly ActiveChunkRegistry _registry = activeChunkRegistry ?? new ActiveChunkRegistry();
+    private readonly bool _ownsRegistry = activeChunkRegistry is null;
 
     public IReadOnlyCollection<ActiveChunk> GetActiveChunks(Guid worldId) =>
-        _activeChunks
+        _registry.Chunks
             .Where(pair => pair.Key.WorldId == worldId)
             .Select(pair => pair.Value)
             .OrderBy(active => active.Chunk.Coordinate.Y)
@@ -31,7 +31,30 @@ public sealed class ChunkActivationService(
         Guid worldId,
         ChunkCoordinate coordinate,
         out ActiveChunk? activeChunk) =>
-        _activeChunks.TryGetValue(new ChunkKey(worldId, coordinate), out activeChunk);
+        _registry.Chunks.TryGetValue(new ActiveChunkKey(worldId, coordinate), out activeChunk);
+
+    public async Task ApplyActorMovementAsync(
+        Guid worldId,
+        Guid actorId,
+        Position origin,
+        Position destination,
+        CancellationToken cancellationToken = default)
+    {
+        if (origin.WorldId != worldId || destination.WorldId != worldId)
+            throw new ArgumentException("Movement positions must belong to the world.");
+        await _registry.Gate.WaitAsync(cancellationToken);
+        try
+        {
+            foreach (var activeChunk in _registry.Chunks.Values.Where(active => active.Chunk.WorldId == worldId))
+            {
+                if (activeChunk.Chunk.Contains(origin))
+                    activeChunk.Tiles.SingleOrDefault(tile => tile.Position == origin)?.RemoveOccupant(actorId);
+                if (activeChunk.Chunk.Contains(destination))
+                    activeChunk.Tiles.SingleOrDefault(tile => tile.Position == destination)?.AddOccupant(actorId);
+            }
+        }
+        finally { _registry.Gate.Release(); }
+    }
 
     public async Task SynchronizeAsync(
         World world,
@@ -59,15 +82,15 @@ public sealed class ChunkActivationService(
         var now = timeProvider.GetUtcNow();
         var events = new List<IDomainEvent>();
 
-        await _gate.WaitAsync(cancellationToken);
+        await _registry.Gate.WaitAsync(cancellationToken);
 
         try
         {
             foreach (var coordinate in requiredCoordinates)
             {
-                var key = new ChunkKey(world.Id, coordinate);
+                var key = new ActiveChunkKey(world.Id, coordinate);
 
-                if (_activeChunks.TryGetValue(key, out var existing))
+                if (_registry.Chunks.TryGetValue(key, out var existing))
                 {
                     existing.MarkRelevant(now);
                     await CacheAsync(existing, cancellationToken);
@@ -80,7 +103,7 @@ public sealed class ChunkActivationService(
                 var tiles = await repository.GetTilesAsync(world.Id, coordinate, cancellationToken);
                 var activeChunk = new ActiveChunk(chunk, tiles, now);
 
-                if (_activeChunks.TryAdd(key, activeChunk))
+                if (_registry.Chunks.TryAdd(key, activeChunk))
                 {
                     await CacheAsync(activeChunk, cancellationToken);
                     events.Add(new ChunkActivatedEvent(
@@ -92,7 +115,7 @@ public sealed class ChunkActivationService(
                 }
             }
 
-            var unloadCandidates = _activeChunks
+            var unloadCandidates = _registry.Chunks
                 .Where(pair =>
                     pair.Key.WorldId == world.Id &&
                     !requiredCoordinates.Contains(pair.Key.Coordinate) &&
@@ -113,7 +136,7 @@ public sealed class ChunkActivationService(
                         candidate.Key.Coordinate.Y),
                     cancellationToken);
 
-                if (_activeChunks.TryRemove(candidate.Key, out _))
+                if (_registry.Chunks.TryRemove(candidate.Key, out _))
                 {
                     events.Add(new ChunkDeactivatedEvent(
                         world.Id,
@@ -126,7 +149,7 @@ public sealed class ChunkActivationService(
         }
         finally
         {
-            _gate.Release();
+            _registry.Gate.Release();
         }
 
         if (events.Count > 0)
@@ -135,7 +158,10 @@ public sealed class ChunkActivationService(
         }
     }
 
-    public void Dispose() => _gate.Dispose();
+    public void Dispose()
+    {
+        if (_ownsRegistry) _registry.Dispose();
+    }
 
     private HashSet<ChunkCoordinate> ResolveRequiredCoordinates(
         World world,
@@ -196,7 +222,4 @@ public sealed class ChunkActivationService(
             CachePolicy.For(CacheDataKind.ActiveChunk),
             cancellationToken);
 
-    private readonly record struct ChunkKey(
-        Guid WorldId,
-        ChunkCoordinate Coordinate);
 }

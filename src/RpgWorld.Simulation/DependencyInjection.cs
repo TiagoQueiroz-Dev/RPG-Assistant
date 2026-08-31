@@ -4,6 +4,8 @@ using RpgWorld.Simulation.Chunks;
 using RpgWorld.Simulation.Time;
 using RpgWorld.Simulation.Engine;
 using RpgWorld.Simulation.Regions;
+using RpgWorld.Simulation.Actors;
+using RpgWorld.Application.Actors.Movement;
 
 namespace RpgWorld.Simulation;
 
@@ -19,6 +21,7 @@ public static class DependencyInjection
 
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton(chunkActivationOptions ?? new ChunkActivationOptions());
+        services.AddSingleton<ActiveChunkRegistry>();
         services.AddSingleton(simulationEngineOptions ?? new SimulationEngineOptions());
         services.AddSingleton<ISimulationScheduler, SimulationScheduler>();
         services.AddSingleton<IWorldCommandGate, WorldCommandGate>();
@@ -30,6 +33,8 @@ public static class DependencyInjection
         services.AddScoped<IWorldTimeCommandService, WorldTimeCommandService>();
         services.AddScoped<IWorldSimulationControlService, WorldSimulationControlService>();
         services.AddScoped<IRegionSimulationService, RegionSimulationService>();
+        services.AddSingleton<IActorMovementPolicy, AdjacentTileMovementPolicy>();
+        services.AddScoped<IActorMovementService, ActorMovementService>();
         services.AddHostedService<SimulationEngine>();
         return services;
     }

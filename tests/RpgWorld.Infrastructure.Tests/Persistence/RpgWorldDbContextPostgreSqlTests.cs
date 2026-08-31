@@ -16,6 +16,7 @@ using RpgWorld.Modules.Default.Worlds;
 using RpgWorld.Application.Worlds.Editing;
 using RpgWorld.Application.Actors;
 using RpgWorld.Domain.Actors;
+using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Infrastructure.Worlds.Editing;
 using Testcontainers.PostgreSql;
 
@@ -196,6 +197,57 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal(4, Assert.Single(storedNpc.Inventory).Quantity);
         Assert.Equal(40, storedNpc.Reputation[factionId]);
         Assert.Equal(player.Id, Assert.Single(storedNpc.Relationships).ActorId);
+    }
+
+    [Fact]
+    public async Task Actor_and_tile_occupancy_move_together_across_chunks()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var world = World.Create("Crossing", 64, 32);
+        var originChunk = world.CreateChunk(new ChunkCoordinate(0, 0));
+        var destinationChunk = world.CreateChunk(new ChunkCoordinate(1, 0));
+        var origin = world.CreateTile(
+            world.PositionAt(31, 0),
+            "temperate",
+            TestDefinitions,
+            0,
+            20m,
+            0.5m);
+        var destination = world.CreateTile(
+            world.PositionAt(32, 0),
+            "temperate",
+            TestDefinitions,
+            0,
+            20m,
+            0.5m);
+        var actor = PlayerActor.Create("Traveler", world, origin.Position, DateTimeOffset.UnixEpoch);
+        origin.AddOccupant(actor.Id);
+        context.AddRange(world, originChunk, destinationChunk, origin, destination, actor);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var store = new EfActorMovementStore(context);
+        var storedActor = await store.GetActorAsync(actor.Id);
+        var storedWorld = await store.GetWorldAsync(world.Id);
+        var storedOrigin = await store.GetTileAsync(origin.Position);
+        var storedDestination = await store.GetTileAsync(destination.Position);
+        Assert.NotNull(storedActor);
+        Assert.NotNull(storedWorld);
+        Assert.NotNull(storedOrigin);
+        Assert.NotNull(storedDestination);
+
+        storedActor.Move(storedWorld, destination.Position, DateTimeOffset.UnixEpoch.AddMinutes(1));
+        storedOrigin.RemoveOccupant(actor.Id);
+        storedDestination.AddOccupant(actor.Id);
+        await store.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        Assert.Equal(destination.Position, (await context.Actors.SingleAsync(candidate => candidate.Id == actor.Id)).Position);
+        Assert.DoesNotContain(actor.Id, (await context.Tiles.SingleAsync(tile => tile.Id == origin.Id)).OccupantIds);
+        Assert.Contains(actor.Id, (await context.Tiles.SingleAsync(tile => tile.Id == destination.Id)).OccupantIds);
     }
 
     [Fact]

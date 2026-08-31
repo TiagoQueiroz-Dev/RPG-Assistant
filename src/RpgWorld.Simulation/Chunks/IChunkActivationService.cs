@@ -11,6 +11,13 @@ public interface IChunkActivationService
         ChunkCoordinate coordinate,
         out ActiveChunk? activeChunk);
 
+    Task ApplyActorMovementAsync(
+        Guid worldId,
+        Guid actorId,
+        Position origin,
+        Position destination,
+        CancellationToken cancellationToken = default);
+
     Task SynchronizeAsync(
         World world,
         IEnumerable<Position> playerPositions,

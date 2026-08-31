@@ -13,6 +13,7 @@ using RpgWorld.Infrastructure.Worlds.Importing;
 using RpgWorld.Infrastructure.Worlds.Editing;
 using RpgWorld.Application.Worlds.Editing;
 using RpgWorld.Application.Actors;
+using RpgWorld.Application.Actors.Movement;
 
 namespace RpgWorld.Infrastructure;
 
@@ -48,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<IWorldSimulationRepository, EfWorldSimulationRepository>();
         services.AddScoped<IRegionSimulationRepository, EfRegionSimulationRepository>();
         services.AddScoped<IActorRepository, EfActorRepository>();
+        services.AddScoped<IActorMovementStore, EfActorMovementStore>();
 
         AddCaching(services, configuration);
 

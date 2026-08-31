@@ -13,6 +13,7 @@ using RpgWorld.Simulation.Time;
 using RpgWorld.Simulation.Engine;
 using System.Globalization;
 using RpgWorld.Api.Authorization;
+using RpgWorld.Application.Actors.Movement;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -88,6 +89,21 @@ app.MapGet(
             return map is null ? Results.NotFound() : Results.Ok(map);
         })
     .WithName("GetPersistedWorldMap");
+
+app.MapPost(
+    "/api/actors/{actorId:guid}/move",
+    async (Guid actorId, ActorMoveApiRequest body, IActorMovementService service, CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await service.MoveAsync(
+                new ActorMoveRequest(actorId, body.DestinationX, body.DestinationY),
+                cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
 
 app.MapPost("/worlds/import", ImportWorldAsync)
     .DisableAntiforgery()
@@ -354,6 +370,8 @@ record WorldClockConfigurationRequest(double TickDurationSeconds, decimal RealTi
 record WorldTimeSpeedRequest(decimal RealTimeMultiplier);
 
 record WorldTimeAdvanceRequest(double DurationSeconds);
+
+record ActorMoveApiRequest(int DestinationX, int DestinationY);
 
 public partial class Program
 {
