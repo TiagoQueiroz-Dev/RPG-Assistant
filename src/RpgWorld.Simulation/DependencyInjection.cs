@@ -10,6 +10,7 @@ using RpgWorld.Simulation.Actors.Utility;
 using RpgWorld.Domain.Actors.Traits;
 using RpgWorld.Application.Actors.Housing;
 using RpgWorld.Simulation.Actors.Housing;
+using RpgWorld.Simulation.Worlds.Resources;
 
 namespace RpgWorld.Simulation;
 
@@ -59,6 +60,7 @@ public static class DependencyInjection
         services.AddSingleton<INpcDecisionDiagnostics, NpcDecisionDiagnostics>();
         services.AddScoped<ISimulationSystem, NpcUtilityAiSimulationSystem>();
         services.AddScoped<ISimulationSystem, NpcMemoryRetentionSimulationSystem>();
+        services.AddScoped<ISimulationSystem, NaturalResourceRegenerationSystem>();
         var housingOptions = npcHousingOptions ?? new NpcHousingOptions();
         housingOptions.Validate();
         services.AddSingleton(housingOptions);

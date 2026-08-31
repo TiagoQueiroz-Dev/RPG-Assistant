@@ -30,6 +30,10 @@ public sealed class PersistedWorldMapProvider(RpgWorldDbContext dbContext)
             .OrderBy(tile => tile.Y)
             .ThenBy(tile => tile.X)
             .ToArrayAsync(cancellationToken);
+        var resources = await dbContext.ResourceDeposits
+            .AsNoTracking()
+            .Where(deposit => deposit.WorldId == worldId && deposit.TileId != null)
+            .ToDictionaryAsync(deposit => deposit.Id, cancellationToken);
         var tilesByChunk = tiles
             .GroupBy(tile => (X: tile.X / world.ChunkSize, Y: tile.Y / world.ChunkSize))
             .ToDictionary(group => group.Key, group => group.ToArray());
@@ -38,15 +42,27 @@ public sealed class PersistedWorldMapProvider(RpgWorldDbContext dbContext)
         {
             var chunkTiles = tilesByChunk
                 .GetValueOrDefault((chunk.CoordinateX, chunk.CoordinateY), [])
-                .Select(tile => new WorldMapTileView(
-                    tile.X,
-                    tile.Y,
-                    tile.TerrainCode,
-                    tile.BiomeCode,
-                    tile.Elevation,
-                    tile.BiomeClassificationOrigin.ToString(),
-                    tile.BiomeClassificationConfidence,
-                    tile.StructureId is not null))
+                .Select(tile =>
+                {
+                    var deposit = tile.ResourceDepositId is { } resourceId &&
+                        resources.TryGetValue(resourceId, out var linkedDeposit)
+                            ? linkedDeposit
+                            : null;
+                    var hasDeposit = deposit?.IsDiscovered == true;
+                    return new WorldMapTileView(
+                        tile.X,
+                        tile.Y,
+                        tile.TerrainCode,
+                        tile.BiomeCode,
+                        tile.Elevation,
+                        tile.BiomeClassificationOrigin.ToString(),
+                        tile.BiomeClassificationConfidence,
+                        tile.StructureId is not null,
+                        hasDeposit,
+                        hasDeposit ? deposit?.ResourceCode : null,
+                        hasDeposit ? deposit?.Quantity : null,
+                        hasDeposit && deposit?.IsExhausted == true);
+                })
                 .ToArray();
 
             return new WorldMapChunkView(

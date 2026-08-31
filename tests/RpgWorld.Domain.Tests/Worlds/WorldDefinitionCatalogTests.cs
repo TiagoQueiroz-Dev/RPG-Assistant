@@ -28,6 +28,11 @@ public sealed class WorldDefinitionCatalogTests
         Assert.True(terrain.IsTraversable);
         Assert.False(terrain.IsAquatic);
         Assert.True(terrain.MovementCost > 1m);
+        Assert.Equal(
+            ["iron", "gold", "coal", "wood", "stone", "food", "herbs"],
+            catalog.Resources.Select(resource => resource.Code));
+        Assert.True(catalog.ResolveResource("WOOD").IsRenewable);
+        Assert.False(catalog.ResolveResource("iron").IsRenewable);
     }
 
     [Fact]
@@ -41,6 +46,7 @@ public sealed class WorldDefinitionCatalogTests
         Assert.Equal("crystal-floor", biome.TerrainCode);
         Assert.Contains("crystals", biome.ResourceTags);
         Assert.Equal("Crystal Floor", catalog.ResolveTerrain(biome.TerrainCode).Name);
+        Assert.Equal("crystal-shard", catalog.ResolveResource("crystal").InventoryItemCode);
     }
 
     [Fact]
@@ -138,6 +144,11 @@ public sealed class WorldDefinitionCatalogTests
                 0.90m,
                 resourceTags: ["crystals"],
                 spawnTags: ["subterranean"])
+        ];
+
+        public IEnumerable<ResourceDefinition> Resources =>
+        [
+            new("crystal", "Crystal", "crystal-shard", 30m, habitatTags: ["crystals"])
         ];
     }
 }

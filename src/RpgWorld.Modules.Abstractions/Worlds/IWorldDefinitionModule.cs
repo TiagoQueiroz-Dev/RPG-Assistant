@@ -7,4 +7,6 @@ public interface IWorldDefinitionModule
     IEnumerable<TerrainDefinition> Terrains { get; }
 
     IEnumerable<BiomeDefinition> Biomes { get; }
+
+    IEnumerable<ResourceDefinition> Resources => [];
 }

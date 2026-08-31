@@ -26,6 +26,10 @@ export interface WorldMapTileView {
   readonly classificationOrigin: 'Automatic' | 'Manual';
   readonly classificationConfidence: number | null;
   readonly hasStructure: boolean;
+  readonly hasResource: boolean;
+  readonly resourceCode: string | null;
+  readonly resourceQuantity: number | null;
+  readonly resourceExhausted: boolean;
 }
 
 export interface WorldMapOverlay {

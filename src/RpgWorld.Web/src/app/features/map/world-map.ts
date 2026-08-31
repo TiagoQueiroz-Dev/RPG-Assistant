@@ -344,6 +344,18 @@ export class WorldMap {
 
         context.fillStyle = BIOME_COLORS[tile.biomeCode] ?? '#5e665f';
         context.fillRect(screen.x, screen.y, renderedTileSize + 0.5, renderedTileSize + 0.5);
+        if (tile.hasResource) {
+          context.fillStyle = tile.resourceExhausted ? '#787878' : '#4de0ad';
+          context.beginPath();
+          context.arc(
+            screen.x + renderedTileSize * 0.25,
+            screen.y + renderedTileSize * 0.25,
+            Math.max(1.5, renderedTileSize * 0.12),
+            0,
+            Math.PI * 2,
+          );
+          context.fill();
+        }
         if (tile.hasStructure) {
           context.fillStyle = '#f1c66d';
           const markerSize = Math.max(2, renderedTileSize * 0.38);

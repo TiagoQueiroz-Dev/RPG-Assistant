@@ -31,10 +31,23 @@ public sealed class DefaultWorldDefinitions : IWorldDefinitionModule
         new("volcanic", "Volcanic", "volcanic-rock", 15m, 90m, 0m, 0.50m, 1.50m, ["obsidian", "sulfur"], ["fire-adapted"])
     ];
 
+    private static readonly ResourceDefinition[] ResourceDefinitions =
+    [
+        new("iron", "Iron", "iron", 120m, habitatTags: ["ore"]),
+        new("gold", "Gold", "gold", 60m, habitatTags: ["ore", "minerals"]),
+        new("coal", "Coal", "coal", 160m, habitatTags: ["ore", "peat"]),
+        new("wood", "Wood", "wood", 100m, regenerationPerWorldHour: 2m, habitatTags: ["wood"]),
+        new("stone", "Stone", "stone", 200m, habitatTags: ["stone"]),
+        new("food", "Food", "food", 80m, regenerationPerWorldHour: 4m, habitatTags: ["food", "fish"]),
+        new("herbs", "Herbs", "herbs", 50m, regenerationPerWorldHour: 1m, habitatTags: ["herbs"])
+    ];
+
     public static WorldDefinitionCatalog Catalog { get; } =
         WorldDefinitionCatalogFactory.Create([new DefaultWorldDefinitions()]);
 
     public IEnumerable<TerrainDefinition> Terrains => TerrainDefinitions;
 
     public IEnumerable<BiomeDefinition> Biomes => BiomeDefinitions;
+
+    public IEnumerable<ResourceDefinition> Resources => ResourceDefinitions;
 }

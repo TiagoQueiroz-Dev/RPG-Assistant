@@ -30,6 +30,9 @@ using RpgWorld.Domain.Actors.Housing;
 using RpgWorld.Simulation.Actors.Housing;
 using RpgWorld.Simulation.Engine;
 using RpgWorld.Simulation.Time;
+using RpgWorld.Application.Worlds.Resources;
+using RpgWorld.Domain.Worlds.Resources;
+using RpgWorld.Simulation.Worlds.Resources;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -495,6 +498,112 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         var storedBuilder = Assert.Single(residents, resident => resident.Id == builder.Id);
         Assert.Equal(0, storedBuilder.InventoryQuantity("wood"));
         Assert.Equal(0, storedBuilder.InventoryQuantity("stone"));
+    }
+
+    [Fact]
+    public async Task Natural_resource_discovery_exhaustion_regeneration_and_consumption_survive_restart()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        var now = new DateTimeOffset(2033, 6, 7, 9, 0, 0, TimeSpan.Zero);
+        var sourceWorldEventId = Guid.NewGuid();
+        var world = World.Create("Persistent resources", 8, 8);
+        var tile = world.CreateTile(
+            world.PositionAt(2, 2),
+            "forest",
+            DefaultWorldDefinitions.Catalog,
+            0,
+            20m,
+            0.5m);
+        var actor = NpcActor.Create("Gatherer", world, tile.Position, now);
+        var deposit = ResourceDeposit.SpawnOnTile(
+            world,
+            tile,
+            DefaultWorldDefinitions.Catalog.ResolveResource("wood"),
+            now,
+            initialQuantity: 5m,
+            capacity: 10m,
+            regenerationPerWorldHour: 2m,
+            sourceWorldEventId: sourceWorldEventId);
+        deposit.Discover(actor.Id, now);
+        deposit.Extract(5m, ResourceConsumer.Actor(actor.Id), now);
+
+        await using (var writeContext = new RpgWorldDbContext(options))
+        {
+            await writeContext.Database.MigrateAsync();
+            writeContext.AddRange(world, tile, actor, deposit);
+            await writeContext.SaveChangesAsync();
+        }
+
+        await using (var regenerationContext = new RpgWorldDbContext(options))
+        {
+            var system = new NaturalResourceRegenerationSystem(
+                new EfNaturalResourceRepository(regenerationContext));
+            var instant = now.AddHours(2);
+            await system.ExecuteAsync(new SimulationTickContext(
+                world.Id,
+                new WorldClockSnapshot(world.Id, instant, TimeSpan.FromHours(1), 1m, instant)));
+            var service = new NaturalResourceService(
+                new EfNaturalResourceRepository(regenerationContext),
+                DefaultWorldDefinitions.Catalog);
+            await service.ConsumeAsync(
+                deposit.Id,
+                ResourceConsumer.City(Guid.NewGuid()),
+                3m,
+                instant);
+        }
+
+        await using var readContext = new RpgWorldDbContext(options);
+        var stored = await readContext.ResourceDeposits.AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == deposit.Id);
+        var storedTile = await readContext.Tiles.AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == tile.Id);
+
+        Assert.True(stored.IsDiscovered);
+        Assert.False(stored.IsExhausted);
+        Assert.Equal(1m, stored.Quantity);
+        Assert.Equal(ResourceConsumerKind.City, stored.LastConsumerKind);
+        Assert.Equal(sourceWorldEventId, stored.SourceWorldEventId);
+        Assert.Equal(stored.Id, storedTile.ResourceDepositId);
+    }
+
+    [Fact]
+    public async Task Concurrent_resource_extractions_are_rejected_instead_of_losing_quantity()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        var now = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Concurrent resources", 8, 8);
+        var deposit = ResourceDeposit.SpawnInRegion(
+            world,
+            new ChunkCoordinate(0, 0),
+            DefaultWorldDefinitions.Catalog.ResolveResource("stone"),
+            now,
+            initialQuantity: 5m,
+            regenerationPerWorldHour: 0m);
+        deposit.Discover(Guid.NewGuid(), now);
+        await using (var seedContext = new RpgWorldDbContext(options))
+        {
+            await seedContext.Database.MigrateAsync();
+            seedContext.AddRange(world, deposit);
+            await seedContext.SaveChangesAsync();
+        }
+
+        await using var firstContext = new RpgWorldDbContext(options);
+        await using var secondContext = new RpgWorldDbContext(options);
+        var first = await firstContext.ResourceDeposits.SingleAsync(candidate => candidate.Id == deposit.Id);
+        var second = await secondContext.ResourceDeposits.SingleAsync(candidate => candidate.Id == deposit.Id);
+        first.Extract(1m, ResourceConsumer.City(Guid.NewGuid()), now);
+        second.Extract(1m, ResourceConsumer.Construction(Guid.NewGuid()), now);
+
+        await firstContext.SaveChangesAsync();
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => secondContext.SaveChangesAsync());
+
+        await using var readContext = new RpgWorldDbContext(options);
+        Assert.Equal(4m, (await readContext.ResourceDeposits.AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == deposit.Id)).Quantity);
     }
 
     [Theory]

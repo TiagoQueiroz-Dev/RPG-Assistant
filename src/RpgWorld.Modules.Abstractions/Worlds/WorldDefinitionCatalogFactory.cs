@@ -11,6 +11,7 @@ public static class WorldDefinitionCatalogFactory
 
         return new WorldDefinitionCatalog(
             materializedModules.SelectMany(module => module.Terrains),
-            materializedModules.SelectMany(module => module.Biomes));
+            materializedModules.SelectMany(module => module.Biomes),
+            materializedModules.SelectMany(module => module.Resources));
     }
 }

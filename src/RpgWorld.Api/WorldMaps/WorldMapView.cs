@@ -25,4 +25,8 @@ public sealed record WorldMapTileView(
     short Elevation,
     string ClassificationOrigin = "Automatic",
     decimal? ClassificationConfidence = null,
-    bool HasStructure = false);
+    bool HasStructure = false,
+    bool HasResource = false,
+    string? ResourceCode = null,
+    decimal? ResourceQuantity = null,
+    bool ResourceExhausted = false);
