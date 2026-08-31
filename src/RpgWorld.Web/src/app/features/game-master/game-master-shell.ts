@@ -207,6 +207,9 @@ export class GameMasterShell {
           wealth: faction.wealth,
           memberCount: faction.memberActorIds.length,
           territorySize: faction.territory.length,
+          diplomacySummary: faction.relations.length > 0
+            ? faction.relations.map(relation => relation.state).join(', ')
+            : 'sem relações',
         })),
       })),
       error: () => this.world.update(world => ({ ...world, factions: [] })),

@@ -105,6 +105,16 @@ public sealed class DemoWorldMapEndpointTests
                 createdAtUtc = DateTimeOffset.UnixEpoch,
                 territory = Array.Empty<object>()
             }),
+            JsonRequest(HttpMethod.Post,
+                $"/api/worlds/{worldId}/factions/{Guid.NewGuid()}/relations/{Guid.NewGuid()}/modifiers",
+                new
+                {
+                    source = "Event",
+                    reason = "Unauthorized diplomacy",
+                    affinityDelta = -10,
+                    tensionDelta = 10,
+                    occurredAtUtc = DateTimeOffset.UnixEpoch
+                }),
             JsonRequest(HttpMethod.Put, $"/api/worlds/{worldId}/clock/configuration", new { tickDurationSeconds = 60, realTimeMultiplier = 1 }),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/time/pause"),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/time/resume"),

@@ -225,6 +225,7 @@
               @if (faction.wealth !== undefined) {
                 <small>Riqueza {{ faction.wealth }} · {{ faction.territorySize ?? 0 }} tiles</small>
               }
+              @if (faction.diplomacySummary) { <small>Diplomacia: {{ faction.diplomacySummary }}</small> }
             </p>
             <span class="disposition">{{ faction.disposition }}</span>
           </div>

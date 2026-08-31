@@ -21,5 +21,6 @@ public static class FactionHistoryEventTypes
     public const string TerritoryReleased = "territory-released";
     public const string PowerChanged = "power-changed";
     public const string RelationChanged = "relation-changed";
+    public const string DiplomaticStateChanged = "diplomatic-state-changed";
     public const string Dissolved = "dissolved";
 }

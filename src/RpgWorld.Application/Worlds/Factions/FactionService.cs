@@ -175,19 +175,18 @@ public sealed class FactionService(IFactionRepository repository) : IFactionServ
         CancellationToken cancellationToken = default) =>
         MutateAsync(factionId, faction => faction.SetMilitaryPower(value, reason, occurredAtUtc), cancellationToken);
 
-    public async Task<FactionMasterView> SetRelationAsync(
+    public async Task<FactionMasterView> ApplyRelationModifierAsync(
         Guid factionId,
         Guid targetFactionId,
-        FactionRelationKind kind,
-        int score,
-        string reason,
+        FactionRelationModifier modifier,
         DateTimeOffset occurredAtUtc,
         CancellationToken cancellationToken = default)
     {
         var faction = await RequiredFactionAsync(factionId, cancellationToken);
         var target = await RequiredFactionAsync(targetFactionId, cancellationToken);
         if (target.WorldId != faction.WorldId) throw new InvalidOperationException("Related factions must belong to the same world.");
-        faction.SetRelation(target.Id, kind, score, reason, occurredAtUtc);
+        if (target.Status == FactionStatus.Dissolved) throw new InvalidOperationException("Cannot change relations with a dissolved faction.");
+        faction.ApplyRelationModifier(target.Id, modifier, occurredAtUtc);
         await repository.SaveChangesAsync(cancellationToken);
         return ToView(faction);
     }
@@ -266,7 +265,26 @@ public sealed class FactionService(IFactionRepository repository) : IFactionServ
         faction.MilitaryPower,
         faction.Relations.Values.OrderBy(relation => relation.TargetFactionId)
             .Select(relation => new FactionRelationView(
-                relation.TargetFactionId, relation.Kind.ToString(), relation.Score, relation.UpdatedAtUtc)).ToArray(),
+                relation.TargetFactionId,
+                Faction.StateName(relation.Kind),
+                relation.Affinity,
+                relation.Tension,
+                relation.IsVassal,
+                relation.UpdatedAtUtc,
+                relation.History.Select(change => new FactionRelationChangeView(
+                    change.Id,
+                    change.Source.ToString(),
+                    change.Reason,
+                    change.AffinityDelta,
+                    change.TensionDelta,
+                    change.PreviousAffinity,
+                    change.Affinity,
+                    change.PreviousTension,
+                    change.Tension,
+                    Faction.StateName(change.PreviousState),
+                    Faction.StateName(change.State),
+                    change.SourceEventId,
+                    change.OccurredAtUtc)).ToArray())).ToArray(),
         faction.History.ToArray(),
         faction.CreatedAtUtc,
         faction.DissolvedAtUtc);

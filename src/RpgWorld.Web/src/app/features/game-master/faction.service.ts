@@ -19,9 +19,28 @@ export interface FactionMasterView {
 
 export interface FactionRelationView {
   readonly targetFactionId: string;
-  readonly kind: 'Neutral' | 'Allied' | 'Hostile';
-  readonly score: number;
+  readonly state: 'Alliance' | 'Neutral' | 'Hostile' | 'War' | 'Vassal';
+  readonly affinity: number;
+  readonly tension: number;
+  readonly isVassal: boolean;
   readonly updatedAtUtc: string;
+  readonly history: readonly FactionRelationChangeView[];
+}
+
+export interface FactionRelationChangeView {
+  readonly changeId: string;
+  readonly source: 'Event' | 'Border' | 'Trade' | 'Leadership' | 'History';
+  readonly reason: string;
+  readonly affinityDelta: number;
+  readonly tensionDelta: number;
+  readonly previousAffinity: number;
+  readonly affinity: number;
+  readonly previousTension: number;
+  readonly tension: number;
+  readonly previousState: 'Alliance' | 'Neutral' | 'Hostile' | 'War' | 'Vassal';
+  readonly state: 'Alliance' | 'Neutral' | 'Hostile' | 'War' | 'Vassal';
+  readonly sourceEventId: string | null;
+  readonly occurredAtUtc: string;
 }
 
 @Injectable({ providedIn: 'root' })

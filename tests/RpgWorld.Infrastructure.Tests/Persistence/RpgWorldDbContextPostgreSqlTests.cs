@@ -841,6 +841,74 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Contains(storedFaction.History, entry => entry.EventType == FactionHistoryEventTypes.LeaderChanged);
     }
 
+    [Fact]
+    public async Task Directed_diplomacy_persists_neutral_to_hostile_to_war_with_event_history()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        var now = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Persistent diplomacy", 8, 8);
+        var northLeader = NpcActor.Create("North leader", world, world.PositionAt(1, 1), now);
+        var southLeader = NpcActor.Create("South leader", world, world.PositionAt(6, 6), now);
+        var borderEventId = Guid.NewGuid();
+        Guid northId;
+        Guid southId;
+
+        await using (var createContext = new RpgWorldDbContext(options))
+        {
+            await createContext.Database.MigrateAsync();
+            createContext.AddRange(world, northLeader, southLeader);
+            await createContext.SaveChangesAsync();
+            var service = new FactionService(new EfFactionRepository(createContext));
+            northId = (await service.CreateAsync(new CreateFactionRequest(
+                world.Id, "North", FactionType.Kingdom, northLeader.Id, 0m, 10m, now.AddHours(1)))).FactionId;
+            southId = (await service.CreateAsync(new CreateFactionRequest(
+                world.Id, "South", FactionType.Kingdom, southLeader.Id, 0m, 10m, now.AddHours(1)))).FactionId;
+            var hostile = await service.ApplyRelationModifierAsync(
+                northId,
+                southId,
+                new FactionRelationModifier(
+                    FactionRelationModifierSource.Event,
+                    "A caravan was attacked.",
+                    affinityDelta: -35,
+                    tensionDelta: 55,
+                    sourceEventId: borderEventId),
+                now.AddHours(2));
+            Assert.Equal("Hostile", Assert.Single(hostile.Relations).State);
+        }
+
+        await using (var warContext = new RpgWorldDbContext(options))
+        {
+            var service = new FactionService(new EfFactionRepository(warContext));
+            var war = await service.ApplyRelationModifierAsync(
+                northId,
+                southId,
+                new FactionRelationModifier(
+                    FactionRelationModifierSource.Border,
+                    "Armies crossed the border.",
+                    tensionDelta: 30),
+                now.AddHours(3));
+            Assert.Equal("War", Assert.Single(war.Relations).State);
+        }
+
+        await using var readContext = new RpgWorldDbContext(options);
+        var north = await readContext.Factions.AsNoTracking().SingleAsync(faction => faction.Id == northId);
+        var south = await readContext.Factions.AsNoTracking().SingleAsync(faction => faction.Id == southId);
+        var relation = north.Relations[southId];
+        Assert.Equal(FactionRelationKind.War, relation.Kind);
+        Assert.Equal(-35, relation.Affinity);
+        Assert.Equal(85, relation.Tension);
+        Assert.Equal(2, relation.History.Count);
+        Assert.Equal(borderEventId, relation.History[0].SourceEventId);
+        Assert.Equal(FactionRelationKind.Neutral, relation.History[0].PreviousState);
+        Assert.Equal(FactionRelationKind.Hostile, relation.History[0].State);
+        Assert.Equal(FactionRelationKind.War, relation.History[1].State);
+        Assert.Empty(south.Relations);
+        Assert.Equal(2, north.History.Count(entry =>
+            entry.EventType == FactionHistoryEventTypes.DiplomaticStateChanged));
+    }
+
     [Theory]
     [InlineData("png")]
     [InlineData("jpeg")]

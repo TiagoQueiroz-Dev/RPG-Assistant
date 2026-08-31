@@ -30,4 +30,5 @@ export interface AdminFactionSummary {
   readonly wealth?: number;
   readonly memberCount?: number;
   readonly territorySize?: number;
+  readonly diplomacySummary?: string;
 }

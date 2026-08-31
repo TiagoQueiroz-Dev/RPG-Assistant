@@ -16,9 +16,27 @@ public sealed record CreateFactionRequest(
 
 public sealed record FactionRelationView(
     Guid TargetFactionId,
-    string Kind,
-    int Score,
-    DateTimeOffset UpdatedAtUtc);
+    string State,
+    int Affinity,
+    int Tension,
+    bool IsVassal,
+    DateTimeOffset UpdatedAtUtc,
+    IReadOnlyList<FactionRelationChangeView> History);
+
+public sealed record FactionRelationChangeView(
+    Guid ChangeId,
+    string Source,
+    string Reason,
+    int AffinityDelta,
+    int TensionDelta,
+    int PreviousAffinity,
+    int Affinity,
+    int PreviousTension,
+    int Tension,
+    string PreviousState,
+    string State,
+    Guid? SourceEventId,
+    DateTimeOffset OccurredAtUtc);
 
 public sealed record FactionMasterView(
     Guid FactionId,
@@ -51,6 +69,6 @@ public interface IFactionService
     Task<FactionMasterView> ReleaseTerritoryAsync(Guid factionId, IReadOnlyCollection<FactionTerritoryPosition> territory, string reason, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
     Task<FactionMasterView> AdjustWealthAsync(Guid factionId, decimal delta, string reason, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
     Task<FactionMasterView> SetMilitaryPowerAsync(Guid factionId, decimal value, string reason, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
-    Task<FactionMasterView> SetRelationAsync(Guid factionId, Guid targetFactionId, FactionRelationKind kind, int score, string reason, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
+    Task<FactionMasterView> ApplyRelationModifierAsync(Guid factionId, Guid targetFactionId, FactionRelationModifier modifier, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
     Task<FactionMasterView> DissolveAsync(Guid factionId, string reason, DateTimeOffset occurredAtUtc, CancellationToken cancellationToken = default);
 }

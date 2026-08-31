@@ -67,15 +67,19 @@ public sealed class FactionTests
         Assert.True(faction.AssociateCity(cityId, now.AddHours(2)));
         faction.AdjustWealth(25m, "Successful trade season.", now.AddHours(3));
         faction.SetMilitaryPower(35m, "Hired guards.", now.AddHours(4));
-        faction.SetRelation(targetFactionId, FactionRelationKind.Allied, 60, "Trade alliance.", now.AddHours(5));
+        faction.ApplyRelationModifier(
+            targetFactionId,
+            new FactionRelationModifier(
+                FactionRelationModifierSource.Trade, "Trade alliance.", affinityDelta: 60),
+            now.AddHours(5));
 
         Assert.Equal(territory.ToHashSet(), faction.Territory.ToHashSet());
         Assert.Equal(cityId, Assert.Single(faction.ControlledCityIds));
         Assert.Equal(75m, faction.Wealth);
         Assert.Equal(35m, faction.MilitaryPower);
         var relation = faction.Relations[targetFactionId];
-        Assert.Equal(FactionRelationKind.Allied, relation.Kind);
-        Assert.Equal(60, relation.Score);
+        Assert.Equal(FactionRelationKind.Alliance, relation.Kind);
+        Assert.Equal(60, relation.Affinity);
     }
 
     [Fact]

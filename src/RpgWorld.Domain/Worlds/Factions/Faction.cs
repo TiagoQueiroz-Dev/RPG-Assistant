@@ -208,28 +208,39 @@ public sealed class Faction : AggregateRoot
             new Dictionary<string, string> { ["militaryPower"] = MilitaryPower.ToString(CultureInfo.InvariantCulture) });
     }
 
-    public void SetRelation(
+    public FactionRelation ApplyRelationModifier(
         Guid targetFactionId,
-        FactionRelationKind kind,
-        int score,
-        string reason,
+        FactionRelationModifier modifier,
         DateTimeOffset occurredAtUtc)
     {
         EnsureActive();
         if (targetFactionId == Guid.Empty || targetFactionId == Id)
             throw new ArgumentException("Related faction is invalid.", nameof(targetFactionId));
-        if (!Enum.IsDefined(kind)) throw new ArgumentOutOfRangeException(nameof(kind));
-        if (score is < -100 or > 100) throw new ArgumentOutOfRangeException(nameof(score));
-        var description = RequiredText(reason, nameof(reason), 500);
+        ArgumentNullException.ThrowIfNull(modifier);
+        var current = _relations.GetValueOrDefault(targetFactionId)
+            ?? FactionRelation.Neutral(targetFactionId, CreatedAtUtc);
+        var updated = current.Apply(modifier, occurredAtUtc);
         Touch(occurredAtUtc);
-        _relations[targetFactionId] = new FactionRelation(targetFactionId, kind, score, UpdatedAtUtc);
-        AddHistory(FactionHistoryEventTypes.RelationChanged, description, UpdatedAtUtc,
+        _relations[targetFactionId] = updated;
+        var stateChanged = current.Kind != updated.Kind;
+        AddHistory(
+            stateChanged ? FactionHistoryEventTypes.DiplomaticStateChanged : FactionHistoryEventTypes.RelationChanged,
+            modifier.Reason,
+            UpdatedAtUtc,
             new Dictionary<string, string>
             {
                 ["targetFactionId"] = targetFactionId.ToString(),
-                ["kind"] = kind.ToString(),
-                ["score"] = score.ToString(CultureInfo.InvariantCulture)
+                ["previousState"] = StateName(current.Kind),
+                ["state"] = StateName(updated.Kind),
+                ["affinity"] = updated.Affinity.ToString(CultureInfo.InvariantCulture),
+                ["tension"] = updated.Tension.ToString(CultureInfo.InvariantCulture),
+                ["source"] = modifier.Source.ToString()
             });
+        if (stateChanged)
+            RaiseDomainEvent(new FactionDiplomaticStateChangedEvent(
+                Id, targetFactionId, WorldId, current.Kind, updated.Kind,
+                updated.Affinity, updated.Tension, modifier.Reason, modifier.SourceEventId, UpdatedAtUtc));
+        return updated;
     }
 
     public void Dissolve(string reason, DateTimeOffset occurredAtUtc)
@@ -293,4 +304,14 @@ public sealed class Faction : AggregateRoot
             throw new ArgumentException($"Text cannot exceed {maximumLength} characters.", parameterName);
         return normalized;
     }
+
+    public static string StateName(FactionRelationKind state) => state switch
+    {
+        FactionRelationKind.Alliance => nameof(FactionRelationKind.Alliance),
+        FactionRelationKind.Neutral => nameof(FactionRelationKind.Neutral),
+        FactionRelationKind.Hostile => nameof(FactionRelationKind.Hostile),
+        FactionRelationKind.War => nameof(FactionRelationKind.War),
+        FactionRelationKind.Vassal => nameof(FactionRelationKind.Vassal),
+        _ => throw new ArgumentOutOfRangeException(nameof(state))
+    };
 }

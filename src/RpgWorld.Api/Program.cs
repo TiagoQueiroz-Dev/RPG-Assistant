@@ -308,6 +308,32 @@ app.MapPut(
     });
 
 app.MapPost(
+    "/api/worlds/{worldId:guid}/factions/{factionId:guid}/relations/{targetFactionId:guid}/modifiers",
+    async (HttpContext httpContext, Guid worldId, Guid factionId, Guid targetFactionId, FactionRelationModifierApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        if (!Enum.TryParse<FactionRelationModifierSource>(body.Source, ignoreCase: true, out var source))
+            return Results.BadRequest(new { error = "Unknown diplomatic modifier source." });
+        try
+        {
+            if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+            if (faction.WorldId != worldId) return Results.BadRequest(new { error = "Faction does not belong to this world." });
+            var modifier = new FactionRelationModifier(
+                source,
+                body.Reason,
+                body.AffinityDelta,
+                body.TensionDelta,
+                body.SourceEventId,
+                body.Vassalage);
+            return Results.Ok(await service.ApplyRelationModifierAsync(
+                factionId, targetFactionId, modifier, body.OccurredAtUtc, cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or OverflowException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPost(
     "/api/worlds/{worldId:guid}/factions/{factionId:guid}/dissolve",
     async (HttpContext httpContext, Guid worldId, Guid factionId, FactionReasonApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
     {
@@ -622,6 +648,14 @@ record ChangeFactionLeaderApiRequest(Guid NewLeaderActorId, string Reason, DateT
 record AssociateFactionCityApiRequest(bool ClaimCityTerritory, DateTimeOffset OccurredAtUtc);
 record AdjustFactionWealthApiRequest(decimal Delta, string Reason, DateTimeOffset OccurredAtUtc);
 record SetFactionPowerApiRequest(decimal Value, string Reason, DateTimeOffset OccurredAtUtc);
+record FactionRelationModifierApiRequest(
+    string Source,
+    string Reason,
+    int AffinityDelta,
+    int TensionDelta,
+    Guid? SourceEventId,
+    bool? Vassalage,
+    DateTimeOffset OccurredAtUtc);
 
 public partial class Program
 {
