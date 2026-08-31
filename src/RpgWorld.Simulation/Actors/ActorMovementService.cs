@@ -90,6 +90,7 @@ public sealed class ActorMovementService(
         await publisher.PublishToChunkAsync(originChunk.Id, message, cancellationToken);
         if (destinationChunk.Id != originChunk.Id)
             await publisher.PublishToChunkAsync(destinationChunk.Id, message, cancellationToken);
+        await publisher.PublishToGameMasterAsync(message, cancellationToken);
         return result;
     }
 }

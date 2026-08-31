@@ -23,6 +23,7 @@ using RpgWorld.Application.Worlds.Resources;
 using RpgWorld.Application.Worlds.Cities;
 using RpgWorld.Application.Worlds.Factions;
 using RpgWorld.Application.Worlds.Events;
+using RpgWorld.Application.Worlds.Admin;
 
 namespace RpgWorld.Infrastructure;
 
@@ -84,6 +85,8 @@ public static class DependencyInjection
         services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledEconomyConsequenceHandler>();
         services.AddScoped<IDomainEventHandler<WorldConsequenceAppliedEvent>, CrimeFactionEscalationHandler>();
         services.AddScoped<IDomainEventHandler<WorldConsequenceAppliedEvent>, FactionEconomyEscalationHandler>();
+        services.AddScoped<IWorldAdminRepository, EfWorldAdminRepository>();
+        services.AddScoped<IWorldAdminService, WorldAdminService>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();
         effectiveNpcMemoryOptions.Validate();
         services.AddSingleton(effectiveNpcMemoryOptions);

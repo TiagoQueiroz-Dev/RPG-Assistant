@@ -23,6 +23,7 @@ using RpgWorld.Application.Worlds.Factions;
 using RpgWorld.Domain.Worlds.Factions;
 using RpgWorld.Simulation.Worlds.Factions;
 using RpgWorld.Application.Worlds.Events;
+using RpgWorld.Application.Worlds.Admin;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -190,6 +191,24 @@ app.MapGet(
             return Results.Ok(await service.SearchAsync(new WorldEventQuery(
                 worldId, page ?? 1, pageSize ?? 50, type, actorId, fromUtc, toUtc, x, y, sortOrder, correlationId),
                 cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or OverflowException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapGet(
+    "/api/worlds/{worldId:guid}/admin",
+    async (HttpContext httpContext, Guid worldId, string? entityType, int? page, int? pageSize,
+        int? regionX, int? regionY, Guid? factionId, IWorldAdminService service,
+        CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            return Results.Ok(await service.InspectAsync(new WorldAdminQuery(
+                worldId, entityType ?? "chunks", page ?? 1, pageSize ?? 50,
+                regionX, regionY, factionId), cancellationToken));
         }
         catch (KeyNotFoundException) { return Results.NotFound(); }
         catch (Exception exception) when (exception is ArgumentException or OverflowException)

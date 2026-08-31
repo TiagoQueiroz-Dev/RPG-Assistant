@@ -259,5 +259,55 @@
         }
       </div>
     </article>
+
+    @if (inspector(); as admin) {
+      <article class="panel">
+        <header>
+          <div>
+            <span class="eyebrow">VisÃ£o administrativa global</span>
+            <h2>World Inspector</h2>
+          </div>
+        </header>
+        <div class="stat-grid">
+          <div><strong>{{ admin.summary.totalActors }}</strong><span>Atores</span></div>
+          <div><strong>{{ admin.summary.totalPopulation }}</strong><span>PopulaÃ§Ã£o</span></div>
+          <div><strong>{{ admin.summary.cities }}</strong><span>Cidades</span></div>
+          <div><strong>{{ admin.summary.factions }}</strong><span>FacÃ§Ãµes</span></div>
+          <div><strong>{{ admin.summary.activeWars }}</strong><span>Guerras</span></div>
+          <div><strong>{{ admin.summary.resourceDeposits }}</strong><span>Recursos</span></div>
+        </div>
+        <div class="toolbar" aria-label="Filtros do World Inspector">
+          @for (entityType of admin.availableEntityTypes; track entityType) {
+            <button type="button" [class.active]="inspectorEntityType() === entityType"
+              (click)="setInspectorEntityType(entityType)">{{ entityType }}</button>
+          }
+        </div>
+        <form class="toolbar" (submit)="applyInspectorFilters($event)">
+          <label>RegiÃ£o X <input name="regionX" type="number" min="0" /></label>
+          <label>RegiÃ£o Y <input name="regionY" type="number" min="0" /></label>
+          <label>FacÃ§Ã£o <input name="factionId" type="text" /></label>
+          <button type="submit">Aplicar filtros</button>
+        </form>
+        <div class="table" role="table" aria-label="Entidades administrativas filtradas">
+          @for (entity of admin.entities; track entity.id) {
+            <button type="button" class="table-row" role="row" (click)="selectInspectorEntity(entity)">
+              <span role="cell"><strong>{{ entity.name }}</strong><small>{{ entity.entityType }} Â· {{ entity.status }}</small></span>
+              <span role="cell"><small>RegiÃ£o {{ entity.regionX ?? '-' }}, {{ entity.regionY ?? '-' }}</small></span>
+            </button>
+          }
+        </div>
+        <small>PÃ¡gina {{ admin.page }} de {{ admin.totalPages }} Â· {{ admin.totalEntityCount }} resultado(s)</small>
+        @if (selectedInspectorEntity(); as selected) {
+          <section class="entity-details" aria-label="Detalhes da entidade selecionada">
+            <h3>{{ selected.name }}</h3>
+            <p>{{ selected.entityType }} Â· {{ selected.status }}</p>
+            @for (metric of metricEntries(selected); track metric.key) {
+              <small>{{ metric.key }}: {{ metric.value }}</small>
+            }
+            @if (selected.detailPath) { <small>Detalhes: {{ selected.detailPath }}</small> }
+          </section>
+        }
+      </article>
+    }
   </div>
 </section>

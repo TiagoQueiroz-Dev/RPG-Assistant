@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnDestroy, signal } from '@angular/core';
 import { WorldMap } from '../map/world-map';
 import { WorldAdminView } from './models/world-admin-view';
 import { WorldImportService } from './world-import.service';
@@ -8,6 +8,8 @@ import { ActorAtPositionView, NpcInspectorView, NpcTraitInspectorView } from './
 import { CityService } from './city.service';
 import { FactionService } from './faction.service';
 import { WorldEventService, WorldEventTimelineItem } from './world-event.service';
+import { WorldAdminService, WorldInspectorEntity, WorldInspectorView } from './world-admin.service';
+import { WorldRealtimeService } from '../../core/realtime/world-realtime.service';
 
 @Component({
   selector: 'app-game-master-shell',
@@ -16,12 +18,16 @@ import { WorldEventService, WorldEventTimelineItem } from './world-event.service
   styleUrl: './game-master-shell.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class GameMasterShell {
+export class GameMasterShell implements OnDestroy {
   private readonly importer = inject(WorldImportService);
   private readonly npcInspector = inject(NpcInspectorService);
   private readonly cities = inject(CityService);
   private readonly factions = inject(FactionService);
   private readonly worldEvents = inject(WorldEventService);
+  private readonly worldAdmin = inject(WorldAdminService);
+  private readonly realtime = inject(WorldRealtimeService);
+  private stopRealtimeUpdates?: () => void;
+  private realtimeRefresh?: ReturnType<typeof setTimeout>;
 
   protected readonly importState = signal<'idle' | 'uploading' | 'completed' | 'error'>('idle');
   protected readonly importMessage = signal('PNG, JPG ou WEBP · até 10 MB');
@@ -33,6 +39,10 @@ export class GameMasterShell {
   protected readonly selectedNpc = signal<NpcInspectorView | null>(null);
   protected readonly npcInspectorState = signal<'idle' | 'loading' | 'loaded' | 'empty' | 'error'>('idle');
   protected readonly timeline = signal<readonly WorldEventTimelineItem[]>([]);
+  protected readonly inspector = signal<WorldInspectorView | null>(null);
+  protected readonly selectedInspectorEntity = signal<WorldInspectorEntity | null>(null);
+  protected readonly inspectorEntityType = signal('chunks');
+  protected readonly inspectorFilters = signal<{ regionX?: number; regionY?: number; factionId?: string }>({});
 
   protected readonly world = signal<WorldAdminView>({
     worldId: 'demo',
@@ -73,6 +83,8 @@ export class GameMasterShell {
         this.loadCities(result.worldId);
         this.loadFactions(result.worldId);
         this.loadTimeline(result.worldId);
+        this.loadInspector(result.worldId);
+        this.connectInspectorRealtime(result.worldId);
         this.importState.set('completed');
         this.importMessage.set(
           `${result.tileCount} tiles em ${result.chunkCount} chunks · ${result.imageFormat.toUpperCase()}`,
@@ -145,6 +157,41 @@ export class GameMasterShell {
     return Object.entries(trait.actionScoreMultipliers)
       .map(([action, multiplier]) => ({ action, multiplier }))
       .sort((left, right) => left.action.localeCompare(right.action));
+  }
+
+  protected selectInspectorEntity(entity: WorldInspectorEntity): void {
+    this.selectedInspectorEntity.set(entity);
+  }
+
+  protected setInspectorEntityType(entityType: string): void {
+    this.inspectorEntityType.set(entityType);
+    this.selectedInspectorEntity.set(null);
+    this.loadInspector(this.world().worldId);
+  }
+
+  protected metricEntries(entity: WorldInspectorEntity): readonly { key: string; value: string }[] {
+    return Object.entries(entity.metrics).map(([key, value]) => ({ key, value }));
+  }
+
+  protected applyInspectorFilters(event: SubmitEvent): void {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget as HTMLFormElement);
+    const regionX = form.get('regionX')?.toString().trim();
+    const regionY = form.get('regionY')?.toString().trim();
+    const factionId = form.get('factionId')?.toString().trim();
+    this.inspectorFilters.set({
+      regionX: regionX ? Number(regionX) : undefined,
+      regionY: regionY ? Number(regionY) : undefined,
+      factionId: factionId || undefined,
+    });
+    this.loadInspector(this.world().worldId);
+  }
+
+  ngOnDestroy(): void {
+    this.stopRealtimeUpdates?.();
+    if (this.realtimeRefresh) clearTimeout(this.realtimeRefresh);
+    const worldId = this.world().worldId;
+    if (this.isGuid(worldId)) void this.realtime.leaveGameMaster(worldId);
   }
 
   private loadActorsAtTile(tile: WorldMapTileView): void {
@@ -227,5 +274,23 @@ export class GameMasterShell {
       next: page => this.timeline.set(page.items),
       error: () => this.timeline.set([]),
     });
+  }
+
+  private loadInspector(worldId: string): void {
+    if (!this.isGuid(worldId)) return;
+    this.worldAdmin.inspect(worldId, this.inspectorEntityType(), 1, 50, this.inspectorFilters()).subscribe({
+      next: view => this.inspector.set(view),
+      error: () => this.inspector.set(null),
+    });
+  }
+
+  private connectInspectorRealtime(worldId: string): void {
+    this.stopRealtimeUpdates?.();
+    this.stopRealtimeUpdates = this.realtime.onWorldUpdated(message => {
+      if (message.worldId !== worldId) return;
+      if (this.realtimeRefresh) clearTimeout(this.realtimeRefresh);
+      this.realtimeRefresh = setTimeout(() => this.loadInspector(worldId), 250);
+    });
+    void this.realtime.joinGameMaster(worldId).catch(() => undefined);
   }
 }

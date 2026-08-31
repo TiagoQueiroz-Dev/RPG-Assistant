@@ -42,6 +42,7 @@ using RpgWorld.Simulation.Worlds.Factions;
 using RpgWorld.Application.Worlds.Events;
 using RpgWorld.Domain.Worlds.Events;
 using RpgWorld.Domain.Events;
+using RpgWorld.Application.Worlds.Admin;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -1066,6 +1067,59 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Contains(chain, value => value.CausalityDepth == 2);
         Assert.Contains(chain, value => value.CausalityDepth == 3);
         Assert.All(chain.Where(value => value.CausalityDepth > 0), value => Assert.NotNull(value.CausationId));
+    }
+
+    [Fact]
+    public async Task World_admin_inspector_uses_global_summaries_and_filtered_paged_entity_queries()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString()).Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var now = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Inspectable world", 64, 32, 32);
+        var firstChunk = world.CreateChunk(new ChunkCoordinate(0, 0));
+        var secondChunk = world.CreateChunk(new ChunkCoordinate(1, 0));
+        firstChunk.TransitionSimulationLevel(SimulationLevel.Regional, new RegionAggregateState(20, 30m, 40m, 50m));
+        var player = PlayerActor.Create("Player", world, world.PositionAt(1, 1), now);
+        var npc = NpcActor.Create("NPC", world, world.PositionAt(2, 1), now);
+        var creature = CreatureActor.Create("Creature", world, world.PositionAt(40, 1), now);
+        var army = Faction.Create(world, "Army", FactionType.Army, npc.Id, 100m, 30m, now);
+        var guild = Faction.Create(world, "Guild", FactionType.Guild, player.Id, 50m, 10m, now);
+        npc.JoinFaction(army.Id, now);
+        player.JoinFaction(guild.Id, now);
+        army.ApplyRelationModifier(guild.Id, new FactionRelationModifier(
+            FactionRelationModifierSource.Event, "War for inspector.", tensionDelta: 80), now.AddMinutes(1));
+        var city = City.Create(world, "Capital", world.PositionAt(3, 3), [world.PositionAt(3, 3)],
+            25, 200m, now, army.Id);
+        var tile = world.CreateTile(world.PositionAt(4, 4), "temperate", TestDefinitions, 0, 20m, 0.5m);
+        var resourceDefinition = new ResourceDefinition("ore", "Ore", "ore", 100m);
+        var resource = ResourceDeposit.SpawnOnTile(world, tile, resourceDefinition, now, initialQuantity: 80m);
+        context.AddRange(world, firstChunk, secondChunk, player, npc, creature, army, guild, city, tile, resource);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var service = new WorldAdminService(new EfWorldAdminRepository(context));
+
+        var npcView = await service.InspectAsync(new WorldAdminQuery(
+            world.Id, "npcs", PageSize: 10, RegionX: 0, RegionY: 0, FactionId: army.Id));
+        var secondChunkPage = await service.InspectAsync(new WorldAdminQuery(
+            world.Id, "chunks", Page: 2, PageSize: 1));
+
+        Assert.Equal(3, npcView.Summary.TotalActors);
+        Assert.Equal(1, npcView.Summary.Npcs);
+        Assert.Equal(1, npcView.Summary.Players);
+        Assert.Equal(1, npcView.Summary.Creatures);
+        Assert.Equal(1, npcView.Summary.ActiveChunks);
+        Assert.Equal(1, npcView.Summary.ResourceDeposits);
+        Assert.Equal(80m, npcView.Summary.AvailableResourceQuantity);
+        Assert.Equal(25, npcView.Summary.TotalPopulation);
+        Assert.Equal(1, npcView.Summary.Armies);
+        Assert.Equal(1, npcView.Summary.ActiveWars);
+        var npcEntity = Assert.Single(npcView.Entities);
+        Assert.Equal(npc.Id, npcEntity.Id);
+        Assert.Equal($"/api/actors/{npc.Id}/inspector", npcEntity.DetailPath);
+        Assert.Equal(2, secondChunkPage.TotalEntityCount);
+        Assert.Equal(1, Assert.Single(secondChunkPage.Entities).RegionX);
     }
 
     [Theory]
