@@ -232,5 +232,31 @@
         }
       </div>
     </article>
+
+    <article class="panel">
+      <header>
+        <div>
+          <span class="eyebrow">HistÃ³rico auditÃ¡vel</span>
+          <h2>Timeline do mundo</h2>
+        </div>
+      </header>
+      <div class="table" role="table" aria-label="Eventos relevantes do mundo">
+        @for (event of timeline(); track event.id) {
+          <div class="table-row" role="row">
+            <div role="cell">
+              <strong>{{ event.type }}</strong>
+              <small>{{ event.timestampUtc }}</small>
+            </div>
+            <div role="cell">
+              <span>Payload v{{ event.payloadVersion }}</span>
+              @if (event.actors.length > 0) { <small>{{ event.actors.length }} ator(es)</small> }
+              @if (event.position) { <small>PosiÃ§Ã£o {{ event.position.x }}, {{ event.position.y }}</small> }
+            </div>
+          </div>
+        } @empty {
+          <p>Nenhum evento relevante registrado.</p>
+        }
+      </div>
+    </article>
   </div>
 </section>

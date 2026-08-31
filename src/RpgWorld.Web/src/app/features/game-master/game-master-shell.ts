@@ -7,6 +7,7 @@ import { NpcInspectorService } from './npc-inspector.service';
 import { ActorAtPositionView, NpcInspectorView, NpcTraitInspectorView } from './models/npc-inspector-view';
 import { CityService } from './city.service';
 import { FactionService } from './faction.service';
+import { WorldEventService, WorldEventTimelineItem } from './world-event.service';
 
 @Component({
   selector: 'app-game-master-shell',
@@ -20,6 +21,7 @@ export class GameMasterShell {
   private readonly npcInspector = inject(NpcInspectorService);
   private readonly cities = inject(CityService);
   private readonly factions = inject(FactionService);
+  private readonly worldEvents = inject(WorldEventService);
 
   protected readonly importState = signal<'idle' | 'uploading' | 'completed' | 'error'>('idle');
   protected readonly importMessage = signal('PNG, JPG ou WEBP · até 10 MB');
@@ -30,6 +32,7 @@ export class GameMasterShell {
   protected readonly actorsAtSelectedTile = signal<readonly ActorAtPositionView[]>([]);
   protected readonly selectedNpc = signal<NpcInspectorView | null>(null);
   protected readonly npcInspectorState = signal<'idle' | 'loading' | 'loaded' | 'empty' | 'error'>('idle');
+  protected readonly timeline = signal<readonly WorldEventTimelineItem[]>([]);
 
   protected readonly world = signal<WorldAdminView>({
     worldId: 'demo',
@@ -69,6 +72,7 @@ export class GameMasterShell {
         this.world.update(world => ({ ...world, worldId: result.worldId, name: result.name }));
         this.loadCities(result.worldId);
         this.loadFactions(result.worldId);
+        this.loadTimeline(result.worldId);
         this.importState.set('completed');
         this.importMessage.set(
           `${result.tileCount} tiles em ${result.chunkCount} chunks · ${result.imageFormat.toUpperCase()}`,
@@ -215,6 +219,13 @@ export class GameMasterShell {
         })),
       })),
       error: () => this.world.update(world => ({ ...world, factions: [] })),
+    });
+  }
+
+  private loadTimeline(worldId: string): void {
+    this.worldEvents.list(worldId).subscribe({
+      next: page => this.timeline.set(page.items),
+      error: () => this.timeline.set([]),
     });
   }
 }

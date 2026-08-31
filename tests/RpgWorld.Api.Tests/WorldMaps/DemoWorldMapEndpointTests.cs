@@ -84,6 +84,7 @@ public sealed class DemoWorldMapEndpointTests
         {
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/simulation/start"),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/simulation/pause"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/events?page=1&pageSize=20"),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/clock/ticks/1"),
             JsonRequest(HttpMethod.Post, $"/api/worlds/{worldId}/cities", new
             {

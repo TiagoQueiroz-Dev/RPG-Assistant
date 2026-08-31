@@ -10,6 +10,8 @@ using RpgWorld.Domain.Actors.Housing;
 using RpgWorld.Domain.Worlds.Resources;
 using RpgWorld.Domain.Worlds.Cities;
 using RpgWorld.Domain.Worlds.Factions;
+using RpgWorld.Domain.Worlds.Events;
+using RpgWorld.Infrastructure.Events;
 
 namespace RpgWorld.Infrastructure.Persistence;
 
@@ -50,12 +52,14 @@ public sealed class RpgWorldDbContext : DbContext
     public DbSet<CityTerritoryTile> CityTerritoryTiles => Set<CityTerritoryTile>();
     public DbSet<Faction> Factions => Set<Faction>();
     public DbSet<FactionTerritoryTile> FactionTerritoryTiles => Set<FactionTerritoryTile>();
+    public DbSet<WorldEvent> WorldEvents => Set<WorldEvent>();
 
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         var pendingEvents = CaptureDomainEvents();
+        AddWorldEvents(pendingEvents.Events);
         var result = base.SaveChanges(acceptAllChangesOnSuccess);
 
         DispatchAndClearAsync(pendingEvents, CancellationToken.None)
@@ -74,6 +78,7 @@ public sealed class RpgWorldDbContext : DbContext
         CancellationToken cancellationToken = default)
     {
         var pendingEvents = CaptureDomainEvents();
+        AddWorldEvents(pendingEvents.Events);
         var result = await base.SaveChangesAsync(
             acceptAllChangesOnSuccess,
             cancellationToken);
@@ -129,17 +134,23 @@ public sealed class RpgWorldDbContext : DbContext
         PendingDomainEvents pending,
         CancellationToken cancellationToken)
     {
-        if (_domainEventDispatcher is null || pending.Events.Length == 0)
-        {
-            return;
-        }
+        if (pending.Events.Length == 0) return;
 
         foreach (var aggregate in pending.Aggregates)
         {
             aggregate.ClearDomainEvents();
         }
 
-        await _domainEventDispatcher.DispatchAsync(pending.Events, cancellationToken);
+        if (_domainEventDispatcher is not null)
+            await _domainEventDispatcher.DispatchAsync(pending.Events, cancellationToken);
+    }
+
+    private void AddWorldEvents(IEnumerable<IDomainEvent> domainEvents)
+    {
+        var trackedIds = WorldEvents.Local.Select(worldEvent => worldEvent.Id).ToHashSet();
+        var timelineEvents = domainEvents.Select(WorldEventPolicy.Create).OfType<WorldEvent>()
+            .Where(worldEvent => trackedIds.Add(worldEvent.Id)).ToArray();
+        if (timelineEvents.Length > 0) WorldEvents.AddRange(timelineEvents);
     }
 
     private sealed record PendingDomainEvents(

@@ -22,6 +22,7 @@ using RpgWorld.Simulation.Worlds.Economy;
 using RpgWorld.Application.Worlds.Factions;
 using RpgWorld.Domain.Worlds.Factions;
 using RpgWorld.Simulation.Worlds.Factions;
+using RpgWorld.Application.Worlds.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -174,6 +175,26 @@ app.MapGet(
     "/api/worlds/{worldId:guid}/factions",
     async (Guid worldId, IFactionService service, CancellationToken cancellationToken) =>
         Results.Ok(await service.ListByWorldAsync(worldId, cancellationToken)));
+
+app.MapGet(
+    "/api/worlds/{worldId:guid}/events",
+    async (HttpContext httpContext, Guid worldId, int? page, int? pageSize, string? type,
+        Guid? actorId, DateTimeOffset? fromUtc, DateTimeOffset? toUtc, int? x, int? y,
+        string? sort, IWorldEventService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        if (!Enum.TryParse<WorldEventSortOrder>(sort ?? nameof(WorldEventSortOrder.NewestFirst), true, out var sortOrder))
+            return Results.BadRequest(new { error = "Unknown timeline sort order." });
+        try
+        {
+            return Results.Ok(await service.SearchAsync(new WorldEventQuery(
+                worldId, page ?? 1, pageSize ?? 50, type, actorId, fromUtc, toUtc, x, y, sortOrder),
+                cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or OverflowException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
 
 app.MapGet(
     "/api/factions/{factionId:guid}",

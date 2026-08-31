@@ -22,6 +22,7 @@ using RpgWorld.Application.Actors.Housing;
 using RpgWorld.Application.Worlds.Resources;
 using RpgWorld.Application.Worlds.Cities;
 using RpgWorld.Application.Worlds.Factions;
+using RpgWorld.Application.Worlds.Events;
 
 namespace RpgWorld.Infrastructure;
 
@@ -73,6 +74,8 @@ public static class DependencyInjection
         services.AddScoped<IFactionRepository, EfFactionRepository>();
         services.AddScoped<IFactionWarRepository, EfFactionRepository>();
         services.AddScoped<IFactionService, FactionService>();
+        services.AddScoped<IWorldEventRepository, EfWorldEventRepository>();
+        services.AddScoped<IWorldEventService, WorldEventService>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();
         effectiveNpcMemoryOptions.Validate();
         services.AddSingleton(effectiveNpcMemoryOptions);

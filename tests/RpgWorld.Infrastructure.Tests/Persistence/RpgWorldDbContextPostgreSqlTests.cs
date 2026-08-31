@@ -39,6 +39,8 @@ using RpgWorld.Simulation.Worlds.Economy;
 using RpgWorld.Application.Worlds.Factions;
 using RpgWorld.Domain.Worlds.Factions;
 using RpgWorld.Simulation.Worlds.Factions;
+using RpgWorld.Application.Worlds.Events;
+using RpgWorld.Domain.Worlds.Events;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -960,6 +962,54 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal(90m, relation.LastWarScore!.Total);
         Assert.Equal(50m, relation.LastWarScore.DeclareWarThreshold);
         Assert.Contains(first.History, entry => entry.EventType == FactionHistoryEventTypes.WarDeclared);
+    }
+
+    [Fact]
+    public async Task Relevant_domain_events_are_logged_atomically_and_timeline_filters_survive_restart()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString()).Options;
+        var now = new DateTimeOffset(2026, 8, 31, 10, 0, 0, TimeSpan.Zero);
+        var world = World.Create("Auditable world", 8, 8);
+        var killer = NpcActor.Create("Killer", world, world.PositionAt(1, 1), now);
+        var victim = NpcActor.Create("Victim", world, world.PositionAt(2, 1), now);
+
+        await using (var writeContext = new RpgWorldDbContext(options))
+        {
+            await writeContext.Database.MigrateAsync();
+            writeContext.AddRange(world, killer, victim);
+            await writeContext.SaveChangesAsync();
+            victim.TakeDamage(victim.MaximumHealth, killer.Id, now.AddHours(1));
+            await writeContext.SaveChangesAsync();
+            writeContext.WorldEvents.Add(WorldEvent.Create(
+                Guid.NewGuid(), world.Id, "PositionMarker", now.AddHours(2),
+                new WorldEventPosition(4, 5), [], "{\"label\":\"crossroads\"}"));
+            writeContext.WorldEvents.AddRange(
+                WorldEvent.Create(Guid.NewGuid(), world.Id, "ManualAudit", now.AddHours(3), null, [], "{\"order\":1}"),
+                WorldEvent.Create(Guid.NewGuid(), world.Id, "ManualAudit", now.AddHours(4), null, [], "{\"order\":2}"));
+            await writeContext.SaveChangesAsync();
+        }
+
+        await using var readContext = new RpgWorldDbContext(options);
+        var repository = new EfWorldEventRepository(readContext);
+        var actorResult = await repository.SearchAsync(new WorldEventQuery(
+            world.Id, ActorId: victim.Id, Type: "ActorKilled",
+            FromUtc: now.AddMinutes(30), ToUtc: now.AddHours(1)));
+        var positionResult = await repository.SearchAsync(new WorldEventQuery(
+            world.Id, PositionX: 4, PositionY: 5, SortOrder: WorldEventSortOrder.OldestFirst));
+        var secondNewest = await repository.SearchAsync(new WorldEventQuery(
+            world.Id, Page: 2, PageSize: 1, Type: "ManualAudit"));
+
+        var killed = Assert.Single(actorResult.Items);
+        Assert.Equal(now.AddHours(1), killed.TimestampUtc);
+        Assert.Contains(victim.Id, killed.ActorIds);
+        Assert.Contains(killer.Id, killed.ActorIds);
+        Assert.Contains("\"actorId\"", killed.Payload);
+        Assert.DoesNotContain("domainEvents", killed.Payload, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("PositionMarker", Assert.Single(positionResult.Items).Type);
+        Assert.Equal(2, secondNewest.TotalCount);
+        Assert.Equal(now.AddHours(3), Assert.Single(secondNewest.Items).TimestampUtc);
+        Assert.Empty(await readContext.WorldEvents.Where(value => value.Type == "ActorDamaged").ToArrayAsync());
     }
 
     [Theory]
