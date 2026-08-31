@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\RpgWorld.Infrastructure\RpgWorld.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\RpgWorld.Modules.Default\RpgWorld.Modules.Default.csproj" />
+    <ProjectReference Include="..\..\src\RpgWorld.Simulation\RpgWorld.Simulation.csproj" />
   </ItemGroup>
 
 </Project>

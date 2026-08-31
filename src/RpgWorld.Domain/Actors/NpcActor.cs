@@ -30,6 +30,7 @@ public sealed class NpcActor : Actor
     public string? Job { get; private set; }
     public int? HomeX { get; private set; }
     public int? HomeY { get; private set; }
+    public Guid? HomeStructureId { get; private set; }
     public Position? Home => HomeX.HasValue && HomeY.HasValue
         ? new Position(WorldId, HomeX.Value, HomeY.Value)
         : null;
@@ -112,15 +113,18 @@ public sealed class NpcActor : Actor
         Touch(worldInstant);
     }
 
-    public void SetHome(World world, Position? home, DateTimeOffset worldInstant)
+    public void SetHome(World world, Position? home, DateTimeOffset worldInstant, Guid? structureId = null)
     {
         EnsureAlive();
         ArgumentNullException.ThrowIfNull(world);
         if (world.Id != WorldId || (home.HasValue && !world.Contains(home.Value)))
             throw new ArgumentOutOfRangeException(nameof(home), "Home must be inside the NPC's world.");
+        if (structureId == Guid.Empty || (!home.HasValue && structureId.HasValue))
+            throw new ArgumentException("A home structure requires a valid home position.", nameof(structureId));
         AdvanceNeedsTo(worldInstant);
         HomeX = home?.X;
         HomeY = home?.Y;
+        HomeStructureId = structureId;
         Touch(worldInstant);
     }
 
@@ -140,6 +144,15 @@ public sealed class NpcActor : Actor
         AdvanceNeedsTo(worldInstant);
         _goals.RemoveAll(existing => string.Equals(existing.Code, goal.Code, StringComparison.OrdinalIgnoreCase));
         _goals.Add(goal);
+        Touch(worldInstant);
+    }
+
+    public void RemoveGoal(string code, DateTimeOffset worldInstant)
+    {
+        EnsureAlive();
+        if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Goal code is required.", nameof(code));
+        AdvanceNeedsTo(worldInstant);
+        _goals.RemoveAll(goal => string.Equals(goal.Code, code.Trim(), StringComparison.OrdinalIgnoreCase));
         Touch(worldInstant);
     }
 

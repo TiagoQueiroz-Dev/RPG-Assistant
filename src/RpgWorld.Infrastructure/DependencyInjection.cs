@@ -18,6 +18,7 @@ using RpgWorld.Application.Actors.Inspection;
 using RpgWorld.Application.Actors.Memories;
 using RpgWorld.Domain.Events;
 using RpgWorld.Application.Actors.Relationships;
+using RpgWorld.Application.Actors.Housing;
 
 namespace RpgWorld.Infrastructure;
 
@@ -59,6 +60,7 @@ public static class DependencyInjection
         services.AddScoped<INpcInspectorService, NpcInspectorService>();
         services.AddScoped<INpcMemoryRepository, EfNpcMemoryRepository>();
         services.AddScoped<IActorRelationshipService, ActorRelationshipService>();
+        services.AddScoped<INpcHousingRepository, EfNpcHousingRepository>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();
         effectiveNpcMemoryOptions.Validate();
         services.AddSingleton(effectiveNpcMemoryOptions);

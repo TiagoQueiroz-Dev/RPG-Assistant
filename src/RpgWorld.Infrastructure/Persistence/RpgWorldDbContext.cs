@@ -6,6 +6,7 @@ using RpgWorld.Domain.Events;
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Domain.Actors;
 using RpgWorld.Domain.Actors.Memories;
+using RpgWorld.Domain.Actors.Housing;
 
 namespace RpgWorld.Infrastructure.Persistence;
 
@@ -40,6 +41,7 @@ public sealed class RpgWorldDbContext : DbContext
 
     public DbSet<Actor> Actors => Set<Actor>();
     public DbSet<NpcMemory> NpcMemories => Set<NpcMemory>();
+    public DbSet<HousingConstruction> HousingConstructions => Set<HousingConstruction>();
 
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 

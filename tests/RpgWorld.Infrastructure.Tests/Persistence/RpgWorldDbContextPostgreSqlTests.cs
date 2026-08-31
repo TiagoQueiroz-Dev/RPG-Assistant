@@ -25,6 +25,11 @@ using Microsoft.Extensions.DependencyInjection;
 using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Infrastructure.Worlds.Editing;
 using Testcontainers.PostgreSql;
+using RpgWorld.Application.Actors.Housing;
+using RpgWorld.Domain.Actors.Housing;
+using RpgWorld.Simulation.Actors.Housing;
+using RpgWorld.Simulation.Engine;
+using RpgWorld.Simulation.Time;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -423,6 +428,73 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Empty(context.ChangeTracker.Entries<Tile>());
         var reloaded = await repository.GetTileAsync(world.PositionAt(0, 0));
         Assert.Equal(structureId, reloaded?.StructureId);
+    }
+
+    [Fact]
+    public async Task Autonomous_house_reservation_completion_and_family_home_survive_restart()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        var now = new DateTimeOffset(2032, 4, 5, 8, 0, 0, TimeSpan.Zero);
+        var world = World.Create("Persistent housing", 8, 8);
+        var builder = NpcActor.Create("Builder", world, world.PositionAt(1, 1), now);
+        var family = NpcActor.Create("Family", world, world.PositionAt(1, 1), now);
+        builder.AddFamilyMember(family.Id, now);
+        builder.AddInventory("wood", 4, now);
+        builder.AddInventory("stone", 2, now);
+        var tile = world.CreateTile(
+            world.PositionAt(2, 1),
+            "temperate",
+            TestDefinitions,
+            elevation: 0,
+            temperatureCelsius: 20m,
+            humidity: 0.5m);
+
+        await using (var writeContext = new RpgWorldDbContext(options))
+        {
+            await writeContext.Database.MigrateAsync();
+            writeContext.AddRange(world, builder, family, tile);
+            await writeContext.SaveChangesAsync();
+            var system = new NpcHousingSimulationSystem(
+                new EfNpcHousingRepository(writeContext),
+                new NpcHousingOptions());
+            var firstInstant = now.AddHours(1);
+            var context = new SimulationTickContext(
+                world.Id,
+                new WorldClockSnapshot(world.Id, firstInstant, TimeSpan.FromMinutes(1), 1m, firstInstant));
+
+            await system.ExecuteAsync(context);
+            await system.ExecuteAsync(context with
+            {
+                Clock = context.Clock with { CurrentInstant = firstInstant.AddHours(1) }
+            });
+        }
+
+        await using var readContext = new RpgWorldDbContext(options);
+        var storedConstruction = await readContext.HousingConstructions.AsNoTracking()
+            .SingleAsync(construction => construction.OwnerActorId == builder.Id);
+        var storedTile = await readContext.Tiles.AsNoTracking().SingleAsync(candidate => candidate.Id == tile.Id);
+        var residents = await readContext.Actors.OfType<NpcActor>().AsNoTracking()
+            .Where(actor => actor.Id == builder.Id || actor.Id == family.Id)
+            .OrderBy(actor => actor.Id)
+            .ToArrayAsync();
+
+        Assert.Equal(2, residents.Length);
+        Assert.Equal(HousingConstructionStatus.Completed, storedConstruction.Status);
+        Assert.Equal(100, storedConstruction.Progress);
+        Assert.Equal(storedConstruction.Id, storedTile.StructureId);
+        Assert.Contains(builder.Id, storedConstruction.ResidentActorIds);
+        Assert.Contains(family.Id, storedConstruction.ResidentActorIds);
+        Assert.All(residents, resident =>
+        {
+            Assert.Equal(storedConstruction.Position, resident.Home);
+            Assert.Equal(storedConstruction.Id, resident.HomeStructureId);
+            Assert.DoesNotContain(resident.Goals, goal => goal.Code == NpcGoalCodes.NeedHouse);
+        });
+        var storedBuilder = Assert.Single(residents, resident => resident.Id == builder.Id);
+        Assert.Equal(0, storedBuilder.InventoryQuantity("wood"));
+        Assert.Equal(0, storedBuilder.InventoryQuantity("stone"));
     }
 
     [Theory]

@@ -14,6 +14,7 @@ internal sealed class NpcActorConfiguration : IEntityTypeConfiguration<NpcActor>
         builder.Property(npc => npc.Job).HasColumnName("job").HasMaxLength(120);
         builder.Property(npc => npc.HomeX).HasColumnName("home_x");
         builder.Property(npc => npc.HomeY).HasColumnName("home_y");
+        builder.Property(npc => npc.HomeStructureId).HasColumnName("home_structure_id");
         builder.Property(npc => npc.NeedsUpdatedAt).HasColumnName("needs_updated_at");
         ActorConfiguration.ConfigureJson(builder.Property<List<Guid>>("_familyIds"), "family_ids");
         ActorConfiguration.ConfigureJson(builder.Property<List<NpcGoal>>("_goals"), "goals");

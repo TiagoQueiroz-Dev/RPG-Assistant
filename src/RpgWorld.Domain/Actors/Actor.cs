@@ -111,6 +111,28 @@ public abstract class Actor : AggregateRoot
         Touch(occurredAtUtc);
     }
 
+    public int InventoryQuantity(string itemCode)
+    {
+        if (string.IsNullOrWhiteSpace(itemCode)) throw new ArgumentException("Item code is required.", nameof(itemCode));
+        return _inventory
+            .Where(item => string.Equals(item.ItemCode, itemCode.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Sum(item => item.Quantity);
+    }
+
+    public void ConsumeInventory(string itemCode, int quantity, DateTimeOffset occurredAtUtc)
+    {
+        EnsureAlive();
+        if (string.IsNullOrWhiteSpace(itemCode)) throw new ArgumentException("Item code is required.", nameof(itemCode));
+        if (quantity <= 0) throw new ArgumentOutOfRangeException(nameof(quantity));
+        var index = _inventory.FindIndex(item => string.Equals(item.ItemCode, itemCode.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || _inventory[index].Quantity < quantity)
+            throw new InvalidOperationException($"Actor does not have {quantity} units of '{itemCode}'.");
+        var remaining = _inventory[index].Quantity - quantity;
+        if (remaining == 0) _inventory.RemoveAt(index);
+        else _inventory[index] = _inventory[index] with { Quantity = remaining };
+        Touch(occurredAtUtc);
+    }
+
     public void JoinFaction(Guid? factionId, DateTimeOffset occurredAtUtc)
     {
         EnsureAlive();

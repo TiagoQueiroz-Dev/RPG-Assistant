@@ -8,6 +8,8 @@ using RpgWorld.Simulation.Actors;
 using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Simulation.Actors.Utility;
 using RpgWorld.Domain.Actors.Traits;
+using RpgWorld.Application.Actors.Housing;
+using RpgWorld.Simulation.Actors.Housing;
 
 namespace RpgWorld.Simulation;
 
@@ -18,7 +20,8 @@ public static class DependencyInjection
         ChunkActivationOptions? chunkActivationOptions = null,
         SimulationEngineOptions? simulationEngineOptions = null,
         SimulationLevelOptions? simulationLevelOptions = null,
-        UtilityAiOptions? utilityAiOptions = null)
+        UtilityAiOptions? utilityAiOptions = null,
+        NpcHousingOptions? npcHousingOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -56,6 +59,10 @@ public static class DependencyInjection
         services.AddSingleton<INpcDecisionDiagnostics, NpcDecisionDiagnostics>();
         services.AddScoped<ISimulationSystem, NpcUtilityAiSimulationSystem>();
         services.AddScoped<ISimulationSystem, NpcMemoryRetentionSimulationSystem>();
+        var housingOptions = npcHousingOptions ?? new NpcHousingOptions();
+        housingOptions.Validate();
+        services.AddSingleton(housingOptions);
+        services.AddScoped<ISimulationSystem, NpcHousingSimulationSystem>();
         services.AddHostedService<SimulationEngine>();
         return services;
     }
