@@ -344,6 +344,11 @@ export class WorldMap {
 
         context.fillStyle = BIOME_COLORS[tile.biomeCode] ?? '#5e665f';
         context.fillRect(screen.x, screen.y, renderedTileSize + 0.5, renderedTileSize + 0.5);
+        if (tile.cityId) {
+          context.strokeStyle = 'rgba(241, 198, 109, 0.9)';
+          context.lineWidth = Math.max(1, transform.scale);
+          context.strokeRect(screen.x + 1, screen.y + 1, renderedTileSize - 2, renderedTileSize - 2);
+        }
         if (tile.hasResource) {
           context.fillStyle = tile.resourceExhausted ? '#787878' : '#4de0ad';
           context.beginPath();

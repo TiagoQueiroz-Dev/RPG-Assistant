@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using RpgWorld.Domain.Actors;
+using RpgWorld.Domain.Worlds.Cities;
 
 namespace RpgWorld.Infrastructure.Persistence.Configurations;
 
@@ -15,6 +16,7 @@ internal sealed class NpcActorConfiguration : IEntityTypeConfiguration<NpcActor>
         builder.Property(npc => npc.HomeX).HasColumnName("home_x");
         builder.Property(npc => npc.HomeY).HasColumnName("home_y");
         builder.Property(npc => npc.HomeStructureId).HasColumnName("home_structure_id");
+        builder.Property(npc => npc.ResidentCityId).HasColumnName("resident_city_id");
         builder.Property(npc => npc.NeedsUpdatedAt).HasColumnName("needs_updated_at");
         ActorConfiguration.ConfigureJson(builder.Property<List<Guid>>("_familyIds"), "family_ids");
         ActorConfiguration.ConfigureJson(builder.Property<List<NpcGoal>>("_goals"), "goals");
@@ -33,5 +35,9 @@ internal sealed class NpcActorConfiguration : IEntityTypeConfiguration<NpcActor>
         builder.HasIndex(npc => new { npc.WorldId, npc.Job })
             .HasFilter("actor_type = 'npc'")
             .HasDatabaseName("ix_actors_npc_job");
+        builder.HasIndex(npc => new { npc.WorldId, npc.ResidentCityId })
+            .HasFilter("actor_type = 'npc' AND resident_city_id IS NOT NULL")
+            .HasDatabaseName("ix_actors_npc_resident_city");
+        builder.HasOne<City>().WithMany().HasForeignKey(npc => npc.ResidentCityId).OnDelete(DeleteBehavior.SetNull);
     }
 }

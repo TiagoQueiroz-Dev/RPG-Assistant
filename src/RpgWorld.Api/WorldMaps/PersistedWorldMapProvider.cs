@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RpgWorld.Infrastructure.Persistence;
+using RpgWorld.Domain.Worlds.Cities;
 
 namespace RpgWorld.Api.WorldMaps;
 
@@ -34,6 +35,12 @@ public sealed class PersistedWorldMapProvider(RpgWorldDbContext dbContext)
             .AsNoTracking()
             .Where(deposit => deposit.WorldId == worldId && deposit.TileId != null)
             .ToDictionaryAsync(deposit => deposit.Id, cancellationToken);
+        var cityTerritories = await (
+                from territory in dbContext.CityTerritoryTiles.AsNoTracking()
+                join city in dbContext.Cities.AsNoTracking() on territory.CityId equals city.Id
+                where territory.WorldId == worldId && territory.IsActive && city.Status != CityStatus.Destroyed
+                select new { territory.X, territory.Y, CityId = city.Id, CityName = city.Name })
+            .ToDictionaryAsync(item => (item.X, item.Y), cancellationToken);
         var tilesByChunk = tiles
             .GroupBy(tile => (X: tile.X / world.ChunkSize, Y: tile.Y / world.ChunkSize))
             .ToDictionary(group => group.Key, group => group.ToArray());
@@ -49,6 +56,7 @@ public sealed class PersistedWorldMapProvider(RpgWorldDbContext dbContext)
                             ? linkedDeposit
                             : null;
                     var hasDeposit = deposit?.IsDiscovered == true;
+                    cityTerritories.TryGetValue((tile.X, tile.Y), out var city);
                     return new WorldMapTileView(
                         tile.X,
                         tile.Y,
@@ -61,7 +69,9 @@ public sealed class PersistedWorldMapProvider(RpgWorldDbContext dbContext)
                         hasDeposit,
                         hasDeposit ? deposit?.ResourceCode : null,
                         hasDeposit ? deposit?.Quantity : null,
-                        hasDeposit && deposit?.IsExhausted == true);
+                        hasDeposit && deposit?.IsExhausted == true,
+                        city?.CityId,
+                        city?.CityName);
                 })
                 .ToArray();
 

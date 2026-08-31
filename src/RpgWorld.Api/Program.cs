@@ -17,6 +17,7 @@ using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Domain.Actors.Traits;
 using RpgWorld.Modules.Default.Actors;
 using RpgWorld.Application.Actors.Inspection;
+using RpgWorld.Application.Worlds.Cities;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -124,6 +125,44 @@ app.MapGet(
         await service.GetNpcAsync(actorId, cancellationToken) is { } npc
             ? Results.Ok(npc)
             : Results.NotFound());
+
+app.MapGet(
+    "/api/worlds/{worldId:guid}/cities",
+    async (Guid worldId, ICityService service, CancellationToken cancellationToken) =>
+        Results.Ok(await service.ListByWorldAsync(worldId, cancellationToken)));
+
+app.MapGet(
+    "/api/cities/{cityId:guid}",
+    async (Guid cityId, ICityService service, CancellationToken cancellationToken) =>
+        await service.GetAsync(cityId, cancellationToken) is { } city
+            ? Results.Ok(city)
+            : Results.NotFound());
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/cities",
+    async (HttpContext httpContext, Guid worldId, CreateCityApiRequest body, ICityService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        if (body.Territory is null) return Results.BadRequest(new { error = "City territory is required." });
+        try
+        {
+            var created = await service.CreateAsync(new CreateCityRequest(
+                worldId,
+                body.Name,
+                body.CenterX,
+                body.CenterY,
+                body.Territory.Select(cell => new CityTerritoryPosition(cell.X, cell.Y)).ToArray(),
+                body.InitialPopulation,
+                body.InitialWealth,
+                body.FoundedAtUtc,
+                body.GoverningFactionId,
+                body.ResidentActorIds), cancellationToken);
+            return Results.Created($"/api/cities/{created.CityId}", created);
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
 
 app.MapPost("/worlds/import", ImportWorldAsync)
     .DisableAntiforgery()
@@ -392,6 +431,19 @@ record WorldTimeSpeedRequest(decimal RealTimeMultiplier);
 record WorldTimeAdvanceRequest(double DurationSeconds);
 
 record ActorMoveApiRequest(int DestinationX, int DestinationY);
+
+record CityTerritoryApiPosition(int X, int Y);
+
+record CreateCityApiRequest(
+    string Name,
+    int CenterX,
+    int CenterY,
+    CityTerritoryApiPosition[]? Territory,
+    int InitialPopulation,
+    decimal InitialWealth,
+    DateTimeOffset FoundedAtUtc,
+    Guid? GoverningFactionId,
+    Guid[]? ResidentActorIds);
 
 public partial class Program
 {

@@ -33,6 +33,8 @@ using RpgWorld.Simulation.Time;
 using RpgWorld.Application.Worlds.Resources;
 using RpgWorld.Domain.Worlds.Resources;
 using RpgWorld.Simulation.Worlds.Resources;
+using RpgWorld.Application.Worlds.Cities;
+using RpgWorld.Domain.Worlds.Cities;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -604,6 +606,88 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         await using var readContext = new RpgWorldDbContext(options);
         Assert.Equal(4m, (await readContext.ResourceDeposits.AsNoTracking()
             .SingleAsync(candidate => candidate.Id == deposit.Id)).Quantity);
+    }
+
+    [Fact]
+    public async Task City_population_territory_residents_and_destruction_history_survive_restart()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        var now = new DateTimeOffset(2034, 7, 8, 10, 0, 0, TimeSpan.Zero);
+        var world = World.Create("Persistent city", 8, 8);
+        var positions = new[] { world.PositionAt(1, 1), world.PositionAt(2, 1), world.PositionAt(2, 2) };
+        var tiles = positions.Select(position => world.CreateTile(
+            position, "temperate", TestDefinitions, 0, 20m, 0.5m)).ToArray();
+        var npc = NpcActor.Create("Citizen", world, positions[0], now);
+        await using (var seedContext = new RpgWorldDbContext(options))
+        {
+            await seedContext.Database.MigrateAsync();
+            seedContext.AddRange(world, npc);
+            seedContext.Tiles.AddRange(tiles);
+            await seedContext.SaveChangesAsync();
+        }
+
+        Guid cityId;
+        await using (var createContext = new RpgWorldDbContext(options))
+        {
+            var service = new CityService(new EfCityRepository(createContext));
+            var created = await service.CreateAsync(new CreateCityRequest(
+                world.Id,
+                "Stonebridge",
+                1,
+                1,
+                positions.Select(position => new CityTerritoryPosition(position.X, position.Y)).ToArray(),
+                InitialPopulation: 20,
+                InitialWealth: 300m,
+                FoundedAtUtc: now,
+                GoverningFactionId: Guid.NewGuid(),
+                ResidentActorIds: [npc.Id]));
+            cityId = created.CityId;
+        }
+
+        await using (var evolveContext = new RpgWorldDbContext(options))
+        {
+            var service = new CityService(new EfCityRepository(evolveContext));
+            var loaded = await service.GetAsync(cityId);
+            Assert.NotNull(loaded);
+            Assert.Equal(3, loaded.Territory.Count);
+            Assert.Equal(npc.Id, Assert.Single(loaded.ResidentActorIds));
+            await service.ChangePopulationAsync(cityId, 5, "New families arrived.", now.AddHours(1));
+            await service.BeginCrisisAsync(cityId, "Flood", 70, now.AddHours(2));
+            await service.DestroyAsync(cityId, "The river consumed the city.", now.AddHours(3));
+        }
+
+        await using (var readContext = new RpgWorldDbContext(options))
+        {
+            var stored = await readContext.Cities.AsNoTracking().Include("_territoryTiles")
+                .SingleAsync(city => city.Id == cityId);
+            var storedNpc = Assert.IsType<NpcActor>(await readContext.Actors.AsNoTracking()
+                .SingleAsync(actor => actor.Id == npc.Id));
+            Assert.Equal(CityStatus.Destroyed, stored.Status);
+            Assert.Equal(0, stored.Population);
+            Assert.Null(storedNpc.ResidentCityId);
+            Assert.Equal(
+                [CityHistoryEventTypes.Founded, CityHistoryEventTypes.ResidentAssociated,
+                    CityHistoryEventTypes.Growth, CityHistoryEventTypes.Crisis, CityHistoryEventTypes.Destroyed],
+                stored.History.Select(entry => entry.EventType));
+            Assert.All(stored.TerritoryTiles, territory => Assert.False(territory.IsActive));
+        }
+
+        await using (var successorContext = new RpgWorldDbContext(options))
+        {
+            var service = new CityService(new EfCityRepository(successorContext));
+            var successor = await service.CreateAsync(new CreateCityRequest(
+                world.Id,
+                "New Stonebridge",
+                1,
+                1,
+                positions.Select(position => new CityTerritoryPosition(position.X, position.Y)).ToArray(),
+                2,
+                10m,
+                now.AddDays(1)));
+            Assert.NotEqual(cityId, successor.CityId);
+        }
     }
 
     [Theory]

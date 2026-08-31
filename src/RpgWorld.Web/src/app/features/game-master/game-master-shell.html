@@ -193,10 +193,11 @@
           <div class="table-row" role="row">
             <div role="cell">
               <strong>{{ city.name }}</strong
-              ><small>{{ city.population }} habitantes</small>
+              ><small>{{ city.population }} habitantes - {{ city.status ?? 'Active' }}</small>
             </div>
             <div role="cell">
               <span>Alimento</span><strong>{{ city.foodStockDays }} dias</strong>
+              @if (city.wealth !== undefined) { <small>Riqueza {{ city.wealth }}</small> }
             </div>
           </div>
         }

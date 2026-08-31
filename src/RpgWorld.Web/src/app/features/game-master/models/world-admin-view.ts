@@ -14,6 +14,8 @@ export interface AdminCitySummary {
   readonly name: string;
   readonly population: number;
   readonly foodStockDays: number;
+  readonly status?: 'Active' | 'Crisis' | 'Destroyed';
+  readonly wealth?: number;
 }
 
 export interface AdminFactionSummary {

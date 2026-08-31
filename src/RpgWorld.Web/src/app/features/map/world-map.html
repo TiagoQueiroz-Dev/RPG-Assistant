@@ -45,6 +45,9 @@
         @if (tile.hasResource) {
           <span>Recurso: {{ tile.resourceCode }} - {{ tile.resourceQuantity | number: '1.0-2' }}</span>
         }
+        @if (tile.cityId) {
+          <span>Cidade: {{ tile.cityName }}</span>
+        }
       } @else if (hoveredPosition(); as position) {
         <strong>Coordenada</strong>
         <span>X {{ position.x }} · Y {{ position.y }}</span>

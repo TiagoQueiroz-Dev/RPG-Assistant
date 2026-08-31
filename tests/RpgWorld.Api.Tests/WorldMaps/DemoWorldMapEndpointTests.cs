@@ -85,6 +85,16 @@ public sealed class DemoWorldMapEndpointTests
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/simulation/start"),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/simulation/pause"),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/clock/ticks/1"),
+            JsonRequest(HttpMethod.Post, $"/api/worlds/{worldId}/cities", new
+            {
+                name = "Unauthorized",
+                centerX = 0,
+                centerY = 0,
+                territory = new[] { new { x = 0, y = 0 } },
+                initialPopulation = 1,
+                initialWealth = 0,
+                foundedAtUtc = DateTimeOffset.UnixEpoch
+            }),
             JsonRequest(HttpMethod.Put, $"/api/worlds/{worldId}/clock/configuration", new { tickDurationSeconds = 60, realTimeMultiplier = 1 }),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/time/pause"),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/time/resume"),

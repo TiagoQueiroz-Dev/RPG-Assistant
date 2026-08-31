@@ -20,6 +20,7 @@ using RpgWorld.Domain.Events;
 using RpgWorld.Application.Actors.Relationships;
 using RpgWorld.Application.Actors.Housing;
 using RpgWorld.Application.Worlds.Resources;
+using RpgWorld.Application.Worlds.Cities;
 
 namespace RpgWorld.Infrastructure;
 
@@ -65,6 +66,8 @@ public static class DependencyInjection
         services.AddScoped<INaturalResourceRepository, EfNaturalResourceRepository>();
         services.AddScoped<INaturalResourceService, NaturalResourceService>();
         services.AddScoped<IDomainEventHandler<NaturalResourceEmergenceEvent>, NaturalResourceEmergenceHandler>();
+        services.AddScoped<ICityRepository, EfCityRepository>();
+        services.AddScoped<ICityService, CityService>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();
         effectiveNpcMemoryOptions.Validate();
         services.AddSingleton(effectiveNpcMemoryOptions);

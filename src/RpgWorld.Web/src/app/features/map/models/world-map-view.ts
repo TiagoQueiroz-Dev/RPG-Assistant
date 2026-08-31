@@ -30,6 +30,8 @@ export interface WorldMapTileView {
   readonly resourceCode: string | null;
   readonly resourceQuantity: number | null;
   readonly resourceExhausted: boolean;
+  readonly cityId: string | null;
+  readonly cityName: string | null;
 }
 
 export interface WorldMapOverlay {

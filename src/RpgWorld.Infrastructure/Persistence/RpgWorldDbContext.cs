@@ -8,6 +8,7 @@ using RpgWorld.Domain.Actors;
 using RpgWorld.Domain.Actors.Memories;
 using RpgWorld.Domain.Actors.Housing;
 using RpgWorld.Domain.Worlds.Resources;
+using RpgWorld.Domain.Worlds.Cities;
 
 namespace RpgWorld.Infrastructure.Persistence;
 
@@ -44,6 +45,8 @@ public sealed class RpgWorldDbContext : DbContext
     public DbSet<NpcMemory> NpcMemories => Set<NpcMemory>();
     public DbSet<HousingConstruction> HousingConstructions => Set<HousingConstruction>();
     public DbSet<ResourceDeposit> ResourceDeposits => Set<ResourceDeposit>();
+    public DbSet<City> Cities => Set<City>();
+    public DbSet<CityTerritoryTile> CityTerritoryTiles => Set<CityTerritoryTile>();
 
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 

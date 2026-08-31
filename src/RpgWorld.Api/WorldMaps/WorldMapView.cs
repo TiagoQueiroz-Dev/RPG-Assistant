@@ -29,4 +29,6 @@ public sealed record WorldMapTileView(
     bool HasResource = false,
     string? ResourceCode = null,
     decimal? ResourceQuantity = null,
-    bool ResourceExhausted = false);
+    bool ResourceExhausted = false,
+    Guid? CityId = null,
+    string? CityName = null);

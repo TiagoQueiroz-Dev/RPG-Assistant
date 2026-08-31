@@ -5,6 +5,7 @@ import { WorldImportService } from './world-import.service';
 import { WorldMapTileView } from '../map/models/world-map-view';
 import { NpcInspectorService } from './npc-inspector.service';
 import { ActorAtPositionView, NpcInspectorView, NpcTraitInspectorView } from './models/npc-inspector-view';
+import { CityService } from './city.service';
 
 @Component({
   selector: 'app-game-master-shell',
@@ -16,6 +17,7 @@ import { ActorAtPositionView, NpcInspectorView, NpcTraitInspectorView } from './
 export class GameMasterShell {
   private readonly importer = inject(WorldImportService);
   private readonly npcInspector = inject(NpcInspectorService);
+  private readonly cities = inject(CityService);
 
   protected readonly importState = signal<'idle' | 'uploading' | 'completed' | 'error'>('idle');
   protected readonly importMessage = signal('PNG, JPG ou WEBP · até 10 MB');
@@ -63,6 +65,7 @@ export class GameMasterShell {
     this.importer.import(file, name, gridResolution).subscribe({
       next: result => {
         this.world.update(world => ({ ...world, worldId: result.worldId, name: result.name }));
+        this.loadCities(result.worldId);
         this.importState.set('completed');
         this.importMessage.set(
           `${result.tileCount} tiles em ${result.chunkCount} chunks · ${result.imageFormat.toUpperCase()}`,
@@ -166,5 +169,22 @@ export class GameMasterShell {
 
   private isGuid(value: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  private loadCities(worldId: string): void {
+    this.cities.list(worldId).subscribe({
+      next: cities => this.world.update(world => ({
+        ...world,
+        cities: cities.map(city => ({
+          cityId: city.cityId,
+          name: city.name,
+          population: city.population,
+          foodStockDays: Math.floor((city.resourceStocks['food'] ?? 0) / Math.max(1, city.population)),
+          status: city.status,
+          wealth: city.wealth,
+        })),
+      })),
+      error: () => this.world.update(world => ({ ...world, cities: [] })),
+    });
   }
 }

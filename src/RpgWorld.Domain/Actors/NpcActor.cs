@@ -1,5 +1,6 @@
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Domain.Actors.Traits;
+using RpgWorld.Domain.Worlds.Cities;
 
 namespace RpgWorld.Domain.Actors;
 
@@ -31,6 +32,7 @@ public sealed class NpcActor : Actor
     public int? HomeX { get; private set; }
     public int? HomeY { get; private set; }
     public Guid? HomeStructureId { get; private set; }
+    public Guid? ResidentCityId { get; private set; }
     public Position? Home => HomeX.HasValue && HomeY.HasValue
         ? new Position(WorldId, HomeX.Value, HomeY.Value)
         : null;
@@ -134,6 +136,28 @@ public sealed class NpcActor : Actor
         if (actorId == Guid.Empty || actorId == Id) throw new ArgumentException("Family member is invalid.", nameof(actorId));
         AdvanceNeedsTo(worldInstant);
         if (!_familyIds.Contains(actorId)) _familyIds.Add(actorId);
+        Touch(worldInstant);
+    }
+
+    public void JoinCity(City city, DateTimeOffset worldInstant)
+    {
+        EnsureAlive();
+        ArgumentNullException.ThrowIfNull(city);
+        if (city.WorldId != WorldId || city.Status == CityStatus.Destroyed)
+            throw new InvalidOperationException("NPC can only join an active city in the same world.");
+        if (ResidentCityId is { } current && current != city.Id)
+            throw new InvalidOperationException("NPC already resides in another city.");
+        AdvanceNeedsTo(worldInstant);
+        ResidentCityId = city.Id;
+        Touch(worldInstant);
+    }
+
+    public void LeaveCity(Guid cityId, DateTimeOffset worldInstant)
+    {
+        if (cityId == Guid.Empty) throw new ArgumentException("City identifier cannot be empty.", nameof(cityId));
+        if (ResidentCityId != cityId) return;
+        if (Status != ActorStatus.Dead) AdvanceNeedsTo(worldInstant);
+        ResidentCityId = null;
         Touch(worldInstant);
     }
 
