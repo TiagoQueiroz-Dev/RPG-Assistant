@@ -12,6 +12,7 @@ using RpgWorld.Infrastructure.Persistence.Repositories;
 using RpgWorld.Infrastructure.Worlds.Importing;
 using RpgWorld.Infrastructure.Worlds.Editing;
 using RpgWorld.Application.Worlds.Editing;
+using RpgWorld.Application.Actors;
 
 namespace RpgWorld.Infrastructure;
 
@@ -46,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IWorldClockRepository, EfWorldClockRepository>();
         services.AddScoped<IWorldSimulationRepository, EfWorldSimulationRepository>();
         services.AddScoped<IRegionSimulationRepository, EfRegionSimulationRepository>();
+        services.AddScoped<IActorRepository, EfActorRepository>();
 
         AddCaching(services, configuration);
 

@@ -4,6 +4,7 @@ using RpgWorld.Application.Events;
 using RpgWorld.Domain;
 using RpgWorld.Domain.Events;
 using RpgWorld.Domain.Worlds;
+using RpgWorld.Domain.Actors;
 
 namespace RpgWorld.Infrastructure.Persistence;
 
@@ -35,6 +36,8 @@ public sealed class RpgWorldDbContext : DbContext
     public DbSet<MapEditOperation> MapEditOperations => Set<MapEditOperation>();
 
     public DbSet<WorldClock> WorldClocks => Set<WorldClock>();
+
+    public DbSet<Actor> Actors => Set<Actor>();
 
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 

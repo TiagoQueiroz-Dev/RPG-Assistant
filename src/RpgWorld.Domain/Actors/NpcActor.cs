@@ -1,0 +1,13 @@
+using RpgWorld.Domain.Worlds;
+
+namespace RpgWorld.Domain.Actors;
+
+public sealed class NpcActor : Actor
+{
+    private NpcActor() { }
+    private NpcActor(string name, World world, Position position, int maximumHealth, DateTimeOffset createdAtUtc)
+        : base(name, world, position, maximumHealth, createdAtUtc) => RecordCreation(createdAtUtc);
+    public override string Kind => "npc";
+    public static NpcActor Create(string name, World world, Position position, DateTimeOffset createdAtUtc, int maximumHealth = 100) =>
+        new(name, world, position, maximumHealth, createdAtUtc);
+}

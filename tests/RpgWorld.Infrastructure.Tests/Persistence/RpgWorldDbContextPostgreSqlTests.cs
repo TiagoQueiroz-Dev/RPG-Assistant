@@ -14,6 +14,8 @@ using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.PixelFormats;
 using RpgWorld.Modules.Default.Worlds;
 using RpgWorld.Application.Worlds.Editing;
+using RpgWorld.Application.Actors;
+using RpgWorld.Domain.Actors;
 using RpgWorld.Infrastructure.Worlds.Editing;
 using Testcontainers.PostgreSql;
 
@@ -156,6 +158,44 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal(SimulationLevel.Regional, stored.SimulationLevel);
         Assert.Equal(aggregate, stored.GetAggregateState());
         Assert.False(stored.AllowsIndividualActions);
+    }
+
+    [Fact]
+    public async Task Actor_hierarchy_and_flexible_state_are_persisted_and_queryable()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var world = World.Create("Living world", 16, 16);
+        var now = new DateTimeOffset(2026, 8, 30, 12, 0, 0, TimeSpan.Zero);
+        var player = PlayerActor.Create("Ayla", world, world.PositionAt(2, 3), now);
+        var npc = NpcActor.Create("Smith", world, world.PositionAt(2, 3), now);
+        var creature = CreatureActor.Create("Wolf", world, world.PositionAt(8, 9), now, 35);
+        var factionId = Guid.NewGuid();
+        npc.SetAttribute("crafting", 18, now);
+        npc.AddInventory("iron-ingot", 4, now);
+        npc.JoinFaction(factionId, now);
+        npc.SetReputation(factionId, 40, now);
+        npc.SetRelationship(player.Id, "customer", 15, now);
+        context.AddRange(world, player, npc, creature);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var repository = new EfActorRepository(context);
+
+        var actors = await repository.ListByWorldAsync(world.Id);
+        var colocated = await repository.ListAtPositionAsync(world.PositionAt(2, 3));
+        var storedNpc = Assert.IsType<NpcActor>(await repository.GetAsync(npc.Id));
+
+        Assert.Equal(3, actors.Count);
+        Assert.Contains(actors, actor => actor is PlayerActor);
+        Assert.Contains(actors, actor => actor is CreatureActor);
+        Assert.Equal(2, colocated.Count);
+        Assert.Equal(18, storedNpc.Attributes["crafting"]);
+        Assert.Equal(4, Assert.Single(storedNpc.Inventory).Quantity);
+        Assert.Equal(40, storedNpc.Reputation[factionId]);
+        Assert.Equal(player.Id, Assert.Single(storedNpc.Relationships).ActorId);
     }
 
     [Fact]
