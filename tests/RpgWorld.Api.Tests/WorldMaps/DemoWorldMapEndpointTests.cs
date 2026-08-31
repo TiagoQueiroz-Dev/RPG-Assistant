@@ -308,6 +308,14 @@ public sealed class DemoWorldMapEndpointTests
                     "Brave",
                     "Faces danger.",
                     new Dictionary<string, decimal> { ["AttackEnemy"] = 1.35m },
-                    true)]));
+                    true)],
+                [new NpcMemoryInspectorView(
+                    Guid.NewGuid(),
+                    "family-member-killed",
+                    Guid.NewGuid(),
+                    100,
+                    DateTimeOffset.UnixEpoch,
+                    null,
+                    new Dictionary<string, string>())]));
     }
 }

@@ -1,12 +1,15 @@
 using RpgWorld.Domain.Actors;
 using RpgWorld.Domain.Actors.Traits;
 using RpgWorld.Domain.Worlds;
+using RpgWorld.Application.Actors.Memories;
 
 namespace RpgWorld.Application.Actors.Inspection;
 
 public sealed class NpcInspectorService(
     IActorRepository repository,
-    ITraitDefinitionCatalog traitCatalog) : INpcInspectorService
+    ITraitDefinitionCatalog traitCatalog,
+    INpcMemoryRepository memories,
+    NpcMemoryOptions memoryOptions) : INpcInspectorService
 {
     public async Task<IReadOnlyList<ActorAtPositionView>> ListAtPositionAsync(
         Guid worldId,
@@ -32,6 +35,12 @@ public sealed class NpcInspectorService(
     {
         if (actorId == Guid.Empty) throw new ArgumentException("Actor identifier is required.", nameof(actorId));
         if (await repository.GetAsync(actorId, cancellationToken) is not NpcActor npc) return null;
+        var relevantMemories = await memories.ListAsync(
+            npc.Id,
+            null,
+            npc.NeedsUpdatedAt,
+            memoryOptions.MinimumInspectorImportance,
+            cancellationToken);
         return new NpcInspectorView(
             npc.Id,
             npc.WorldId,
@@ -46,7 +55,15 @@ public sealed class NpcInspectorService(
             npc.Job,
             npc.CurrentAction,
             npc.FactionId,
-            npc.TraitCodes.Select(ToView).ToArray());
+            npc.TraitCodes.Select(ToView).ToArray(),
+            relevantMemories.Select(memory => new NpcMemoryInspectorView(
+                memory.Id,
+                memory.EventType,
+                memory.TargetId,
+                memory.Importance,
+                memory.CreatedAt,
+                memory.ExpiresAt,
+                memory.Payload)).ToArray());
     }
 
     private NpcTraitInspectorView ToView(string code) =>

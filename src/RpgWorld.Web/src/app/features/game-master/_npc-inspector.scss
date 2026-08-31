@@ -117,6 +117,36 @@
   color: var(--danger);
 }
 
+.memory-history {
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+
+.memory-history h3 {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-display);
+}
+
+.memory-history article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.memory-history small {
+  display: block;
+  color: var(--muted);
+}
+
+.memory-history article > span {
+  color: var(--gold);
+  font-size: 0.72rem;
+}
+
 @media (max-width: 800px) {
   .npc-inspector > header,
   .npc-summary {

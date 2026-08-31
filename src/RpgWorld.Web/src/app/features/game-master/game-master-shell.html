@@ -122,6 +122,20 @@
           <p class="inspector-state">Este NPC ainda não possui traits.</p>
         }
       </div>
+      <section class="memory-history" aria-label="Memórias relevantes do NPC">
+        <h3>Memórias relevantes</h3>
+        @for (memory of npc.memories; track memory.memoryId) {
+          <article>
+            <div>
+              <strong>{{ memory.eventType }}</strong>
+              <small>{{ memory.createdAt }} · alvo {{ memory.targetId ?? 'mundo' }}</small>
+            </div>
+            <span>Importância {{ memory.importance }}/100</span>
+          </article>
+        } @empty {
+          <p class="inspector-state">Nenhuma memória relevante retida.</p>
+        }
+      </section>
     } @else {
       <p class="inspector-state">Selecione um tile com NPCs ou informe o ID de um NPC.</p>
     }

@@ -15,6 +15,8 @@ using RpgWorld.Application.Worlds.Editing;
 using RpgWorld.Application.Actors;
 using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Application.Actors.Inspection;
+using RpgWorld.Application.Actors.Memories;
+using RpgWorld.Domain.Events;
 
 namespace RpgWorld.Infrastructure;
 
@@ -22,7 +24,8 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        NpcMemoryOptions? npcMemoryOptions = null)
     {
         services.AddDbContext<RpgWorldDbContext>((serviceProvider, options) =>
         {
@@ -53,6 +56,13 @@ public static class DependencyInjection
         services.AddScoped<IActorMovementStore, EfActorMovementStore>();
         services.AddScoped<INpcNeedsRepository, EfNpcNeedsRepository>();
         services.AddScoped<INpcInspectorService, NpcInspectorService>();
+        services.AddScoped<INpcMemoryRepository, EfNpcMemoryRepository>();
+        var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();
+        effectiveNpcMemoryOptions.Validate();
+        services.AddSingleton(effectiveNpcMemoryOptions);
+        services.AddScoped<NpcMemoryEventRecorder>();
+        services.AddScoped<IDomainEventHandler<ActorDamagedEvent>, NpcDamagedMemoryHandler>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, NpcFamilyKilledMemoryHandler>();
 
         AddCaching(services, configuration);
 

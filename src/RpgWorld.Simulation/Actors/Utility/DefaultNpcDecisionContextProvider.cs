@@ -1,10 +1,11 @@
 using RpgWorld.Domain.Actors;
+using RpgWorld.Domain.Actors.Memories;
 
 namespace RpgWorld.Simulation.Actors.Utility;
 
 public sealed class DefaultNpcDecisionContextProvider(UtilityAiOptions options) : INpcDecisionContextProvider
 {
-    public NpcDecisionContext Create(NpcActor npc)
+    public NpcDecisionContext Create(NpcActor npc, IReadOnlyList<NpcMemory>? memories = null)
     {
         ArgumentNullException.ThrowIfNull(npc);
         var foodQuantity = npc.Inventory
@@ -23,6 +24,15 @@ public sealed class DefaultNpcDecisionContextProvider(UtilityAiOptions options) 
         var enemyThreat = enemies.Length == 0
             ? 0m
             : enemies.Max(relationship => Math.Abs(relationship.Affinity)) / 100m;
+        var hostileMemoryThreat = (memories ?? [])
+            .Where(memory => memory.EventType is
+                NpcMemoryEventTypes.WasAttacked or
+                NpcMemoryEventTypes.FamilyMemberKilled or
+                NpcMemoryEventTypes.Betrayed)
+            .Select(memory => memory.Importance / 100m)
+            .DefaultIfEmpty(0m)
+            .Max();
+        enemyThreat = Math.Max(enemyThreat, hostileMemoryThreat);
         var travelOpportunity =
             (npc.Home is { } home && home != npc.Position) ||
             npc.Goals.Any(goal =>
@@ -36,7 +46,8 @@ public sealed class DefaultNpcDecisionContextProvider(UtilityAiOptions options) 
             foodAvailability,
             safety: 1m - enemyThreat,
             travelOpportunity,
-            enemyPresent: enemies.Length > 0,
-            enemyThreat);
+            enemyPresent: enemies.Length > 0 || hostileMemoryThreat > 0m,
+            enemyThreat,
+            memories);
     }
 }

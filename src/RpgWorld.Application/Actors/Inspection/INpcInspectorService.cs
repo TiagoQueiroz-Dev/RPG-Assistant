@@ -27,6 +27,15 @@ public sealed record NpcTraitInspectorView(
     IReadOnlyDictionary<string, decimal> ActionScoreMultipliers,
     bool DefinitionAvailable);
 
+public sealed record NpcMemoryInspectorView(
+    Guid MemoryId,
+    string EventType,
+    Guid? TargetId,
+    int Importance,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ExpiresAt,
+    IReadOnlyDictionary<string, string> Payload);
+
 public sealed record NpcInspectorView(
     Guid ActorId,
     Guid WorldId,
@@ -41,4 +50,5 @@ public sealed record NpcInspectorView(
     string? Job,
     string? CurrentAction,
     Guid? FactionId,
-    IReadOnlyList<NpcTraitInspectorView> Traits);
+    IReadOnlyList<NpcTraitInspectorView> Traits,
+    IReadOnlyList<NpcMemoryInspectorView> Memories);

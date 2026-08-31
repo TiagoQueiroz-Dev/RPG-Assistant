@@ -50,9 +50,11 @@ public static class DependencyInjection
         services.AddSingleton<INpcDecisionContextProvider, DefaultNpcDecisionContextProvider>();
         services.TryAddSingleton<ITraitDefinitionCatalog>(new TraitDefinitionCatalog([]));
         services.AddSingleton<INpcUtilityScoreModifier, TraitUtilityScoreModifier>();
+        services.AddSingleton<INpcUtilityScoreModifier, MemoryUtilityScoreModifier>();
         services.AddSingleton<INpcUtilityDecisionService, NpcUtilityDecisionService>();
         services.AddSingleton<INpcDecisionDiagnostics, NpcDecisionDiagnostics>();
         services.AddScoped<ISimulationSystem, NpcUtilityAiSimulationSystem>();
+        services.AddScoped<ISimulationSystem, NpcMemoryRetentionSimulationSystem>();
         services.AddHostedService<SimulationEngine>();
         return services;
     }

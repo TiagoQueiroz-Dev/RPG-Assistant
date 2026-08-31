@@ -1,4 +1,5 @@
 using RpgWorld.Domain.Actors;
+using RpgWorld.Domain.Actors.Memories;
 
 namespace RpgWorld.Simulation.Actors.Utility;
 
@@ -10,7 +11,8 @@ public sealed record NpcDecisionContext
         decimal safety,
         decimal travelOpportunity,
         bool enemyPresent,
-        decimal enemyThreat)
+        decimal enemyThreat,
+        IReadOnlyList<NpcMemory>? memories = null)
     {
         Npc = npc ?? throw new ArgumentNullException(nameof(npc));
         FoodAvailability = Normalize(foodAvailability, nameof(foodAvailability));
@@ -18,6 +20,7 @@ public sealed record NpcDecisionContext
         TravelOpportunity = Normalize(travelOpportunity, nameof(travelOpportunity));
         EnemyPresent = enemyPresent;
         EnemyThreat = Normalize(enemyThreat, nameof(enemyThreat));
+        Memories = memories ?? [];
     }
 
     public NpcActor Npc { get; }
@@ -26,6 +29,7 @@ public sealed record NpcDecisionContext
     public decimal TravelOpportunity { get; }
     public bool EnemyPresent { get; }
     public decimal EnemyThreat { get; }
+    public IReadOnlyList<NpcMemory> Memories { get; }
 
     private static decimal Normalize(decimal value, string parameterName) =>
         value is < 0m or > 1m
@@ -134,7 +138,7 @@ public interface INpcUtilityDecisionService
 
 public interface INpcDecisionContextProvider
 {
-    NpcDecisionContext Create(NpcActor npc);
+    NpcDecisionContext Create(NpcActor npc, IReadOnlyList<NpcMemory>? memories = null);
 }
 
 public interface INpcUtilityScoreModifier

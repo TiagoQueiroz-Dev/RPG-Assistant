@@ -17,6 +17,11 @@ using RpgWorld.Application.Worlds.Editing;
 using RpgWorld.Application.Actors;
 using RpgWorld.Domain.Actors;
 using RpgWorld.Domain.Actors.Traits;
+using RpgWorld.Domain.Actors.Memories;
+using RpgWorld.Application.Actors.Memories;
+using RpgWorld.Application.Events;
+using RpgWorld.Infrastructure.Events;
+using Microsoft.Extensions.DependencyInjection;
 using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Infrastructure.Worlds.Editing;
 using Testcontainers.PostgreSql;
@@ -254,6 +259,75 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal("feed-family", Assert.Single(stored.Goals).Code);
         Assert.Equal(["ambitious"], stored.TraitCodes);
         Assert.Equal(urgentNpcId, Assert.Single(urgent).ActorId);
+    }
+
+    [Fact]
+    public async Task Npc_memories_survive_restart_filter_by_target_and_forget_expired_entries()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        var now = new DateTimeOffset(2026, 8, 31, 6, 0, 0, TimeSpan.Zero);
+        var targetId = Guid.NewGuid();
+        Guid npcId;
+
+        await using (var writeContext = new RpgWorldDbContext(options))
+        {
+            await writeContext.Database.MigrateAsync();
+            var world = World.Create("Persistent memories", 8, 8);
+            var npc = NpcActor.Create("Rememberer", world, world.PositionAt(1, 1), now);
+            var relevant = NpcMemory.Create(
+                npc.Id, world.Id, NpcMemoryEventTypes.FamilyMemberKilled, targetId, 100, now,
+                payload: new Dictionary<string, string> { ["victimId"] = Guid.NewGuid().ToString() });
+            var expired = NpcMemory.Create(
+                npc.Id, world.Id, NpcMemoryEventTypes.WasAttacked, targetId, 40, now, now.AddHours(1));
+            var otherTarget = NpcMemory.Create(
+                npc.Id, world.Id, NpcMemoryEventTypes.Helped, Guid.NewGuid(), 60, now);
+            writeContext.AddRange(world, npc, relevant, expired, otherTarget);
+            await writeContext.SaveChangesAsync();
+            npcId = npc.Id;
+        }
+
+        await using var readContext = new RpgWorldDbContext(options);
+        var repository = new EfNpcMemoryRepository(readContext);
+        var byTarget = await repository.ListAsync(npcId, targetId, now.AddHours(2));
+
+        Assert.Equal(NpcMemoryEventTypes.FamilyMemberKilled, Assert.Single(byTarget).EventType);
+        Assert.Equal(3, await readContext.NpcMemories.CountAsync(memory => memory.ActorId == npcId));
+        Assert.Equal(1, await repository.DeleteExpiredAsync(now.AddHours(2)));
+        Assert.Equal(2, await readContext.NpcMemories.CountAsync(memory => memory.ActorId == npcId));
+    }
+
+    [Fact]
+    public async Task Configured_damage_event_persists_memory_without_recursive_dispatch()
+    {
+        var services = new ServiceCollection();
+        services.AddDbContext<RpgWorldDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+        services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+        services.AddScoped<IActorRepository, EfActorRepository>();
+        services.AddScoped<INpcMemoryRepository, EfNpcMemoryRepository>();
+        services.AddSingleton(new NpcMemoryOptions());
+        services.AddScoped<NpcMemoryEventRecorder>();
+        services.AddScoped<IDomainEventHandler<RpgWorld.Domain.Events.ActorDamagedEvent>, NpcDamagedMemoryHandler>();
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<RpgWorldDbContext>();
+        await context.Database.MigrateAsync();
+        var now = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Event memory", 8, 8);
+        var npc = NpcActor.Create("Victim", world, world.PositionAt(1, 1), now);
+        var attacker = PlayerActor.Create("Attacker", world, world.PositionAt(1, 1), now);
+        context.AddRange(world, npc, attacker);
+        await context.SaveChangesAsync();
+
+        npc.TakeDamage(25, attacker.Id, now.AddHours(1));
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var memory = await context.NpcMemories.SingleAsync(candidate => candidate.ActorId == npc.Id);
+        var storedNpc = Assert.IsType<NpcActor>(await context.Actors.SingleAsync(actor => actor.Id == npc.Id));
+        Assert.Equal(NpcMemoryEventTypes.WasAttacked, memory.EventType);
+        Assert.Equal(-45, storedNpc.Relationships.Single(relationship => relationship.ActorId == attacker.Id).Affinity);
     }
 
     [Fact]

@@ -29,4 +29,15 @@ export interface NpcInspectorView {
   readonly currentAction: string | null;
   readonly factionId: string | null;
   readonly traits: readonly NpcTraitInspectorView[];
+  readonly memories: readonly NpcMemoryInspectorView[];
+}
+
+export interface NpcMemoryInspectorView {
+  readonly memoryId: string;
+  readonly eventType: string;
+  readonly targetId: string | null;
+  readonly importance: number;
+  readonly createdAt: string;
+  readonly expiresAt: string | null;
+  readonly payload: Readonly<Record<string, string>>;
 }
