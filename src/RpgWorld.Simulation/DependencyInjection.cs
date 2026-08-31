@@ -6,6 +6,7 @@ using RpgWorld.Simulation.Engine;
 using RpgWorld.Simulation.Regions;
 using RpgWorld.Simulation.Actors;
 using RpgWorld.Application.Actors.Movement;
+using RpgWorld.Simulation.Actors.Utility;
 
 namespace RpgWorld.Simulation;
 
@@ -15,7 +16,8 @@ public static class DependencyInjection
         this IServiceCollection services,
         ChunkActivationOptions? chunkActivationOptions = null,
         SimulationEngineOptions? simulationEngineOptions = null,
-        SimulationLevelOptions? simulationLevelOptions = null)
+        SimulationLevelOptions? simulationLevelOptions = null,
+        UtilityAiOptions? utilityAiOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -36,6 +38,18 @@ public static class DependencyInjection
         services.AddSingleton<IActorMovementPolicy, AdjacentTileMovementPolicy>();
         services.AddScoped<IActorMovementService, ActorMovementService>();
         services.AddScoped<ISimulationSystem, NpcNeedsSimulationSystem>();
+        var effectiveUtilityAiOptions = utilityAiOptions ?? new UtilityAiOptions();
+        effectiveUtilityAiOptions.Validate();
+        services.AddSingleton(effectiveUtilityAiOptions);
+        services.AddSingleton<NpcAction, EatNpcAction>();
+        services.AddSingleton<NpcAction, SleepNpcAction>();
+        services.AddSingleton<NpcAction, WorkNpcAction>();
+        services.AddSingleton<NpcAction, TravelNpcAction>();
+        services.AddSingleton<NpcAction, AttackEnemyNpcAction>();
+        services.AddSingleton<INpcDecisionContextProvider, DefaultNpcDecisionContextProvider>();
+        services.AddSingleton<INpcUtilityDecisionService, NpcUtilityDecisionService>();
+        services.AddSingleton<INpcDecisionDiagnostics, NpcDecisionDiagnostics>();
+        services.AddScoped<ISimulationSystem, NpcUtilityAiSimulationSystem>();
         services.AddHostedService<SimulationEngine>();
         return services;
     }

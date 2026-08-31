@@ -1,0 +1,42 @@
+using RpgWorld.Domain.Actors;
+
+namespace RpgWorld.Simulation.Actors.Utility;
+
+public sealed class DefaultNpcDecisionContextProvider(UtilityAiOptions options) : INpcDecisionContextProvider
+{
+    public NpcDecisionContext Create(NpcActor npc)
+    {
+        ArgumentNullException.ThrowIfNull(npc);
+        var foodQuantity = npc.Inventory
+            .Where(item => options.FoodItemCodes.Contains(item.ItemCode))
+            .Sum(item => item.Quantity);
+        var foodAvailability = Math.Clamp(
+            foodQuantity / options.FoodQuantityForFullAvailability,
+            0m,
+            1m);
+        var enemies = npc.Relationships
+            .Where(relationship =>
+                relationship.Affinity < 0 &&
+                (string.Equals(relationship.Kind, "enemy", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(relationship.Kind, "hostile", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        var enemyThreat = enemies.Length == 0
+            ? 0m
+            : enemies.Max(relationship => Math.Abs(relationship.Affinity)) / 100m;
+        var travelOpportunity =
+            (npc.Home is { } home && home != npc.Position) ||
+            npc.Goals.Any(goal =>
+                string.Equals(goal.Code, "travel", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(goal.Code, "explore", StringComparison.OrdinalIgnoreCase))
+                ? 1m
+                : 0m;
+
+        return new NpcDecisionContext(
+            npc,
+            foodAvailability,
+            safety: 1m - enemyThreat,
+            travelOpportunity,
+            enemyPresent: enemies.Length > 0,
+            enemyThreat);
+    }
+}
