@@ -41,6 +41,7 @@ using RpgWorld.Domain.Worlds.Factions;
 using RpgWorld.Simulation.Worlds.Factions;
 using RpgWorld.Application.Worlds.Events;
 using RpgWorld.Domain.Worlds.Events;
+using RpgWorld.Domain.Events;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -1010,6 +1011,61 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal(2, secondNewest.TotalCount);
         Assert.Equal(now.AddHours(3), Assert.Single(secondNewest.Items).TimestampUtc);
         Assert.Empty(await readContext.WorldEvents.Where(value => value.Type == "ActorDamaged").ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Actor_killing_produces_idempotent_multi_system_consequence_chain_with_causality()
+    {
+        var services = new ServiceCollection();
+        services.AddDbContext<RpgWorldDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+        services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+        services.AddScoped<IWorldConsequenceRepository, EfWorldConsequenceRepository>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledReputationConsequenceHandler>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledCrimeConsequenceHandler>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledFamilyConsequenceHandler>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledFactionConsequenceHandler>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledEconomyConsequenceHandler>();
+        services.AddScoped<IDomainEventHandler<WorldConsequenceAppliedEvent>, CrimeFactionEscalationHandler>();
+        services.AddScoped<IDomainEventHandler<WorldConsequenceAppliedEvent>, FactionEconomyEscalationHandler>();
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<RpgWorldDbContext>();
+        await context.Database.MigrateAsync();
+        var now = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Consequence chain", 8, 8);
+        var killer = NpcActor.Create("Killer", world, world.PositionAt(1, 1), now);
+        var victim = NpcActor.Create("Merchant", world, world.PositionAt(2, 1), now);
+        var relative = NpcActor.Create("Relative", world, world.PositionAt(2, 2), now);
+        var city = City.Create(world, "Market", world.PositionAt(2, 1), [world.PositionAt(2, 1)], 10, 100m, now);
+        var factionId = Guid.NewGuid();
+        victim.JoinFaction(factionId, now);
+        victim.JoinCity(city, now);
+        victim.AssignJob("merchant", now);
+        relative.AddFamilyMember(victim.Id, now);
+        context.AddRange(world, killer, victim, relative, city);
+        await context.SaveChangesAsync();
+
+        victim.TakeDamage(victim.MaximumHealth, killer.Id, now.AddHours(1));
+        var root = Assert.Single(victim.DomainEvents.OfType<ActorKilledEvent>());
+        await context.SaveChangesAsync();
+        var originalCount = await context.WorldConsequences.CountAsync();
+
+        await scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>().DispatchAsync([root]);
+        Assert.Equal(originalCount, await context.WorldConsequences.CountAsync());
+        Assert.True(originalCount >= 5);
+        Assert.Contains(await context.WorldConsequences.ToArrayAsync(), value => value.Kind == WorldConsequenceKind.Reputation);
+        Assert.Contains(await context.WorldConsequences.ToArrayAsync(), value => value.Kind == WorldConsequenceKind.Crime);
+        Assert.Contains(await context.WorldConsequences.ToArrayAsync(), value => value.Kind == WorldConsequenceKind.Family);
+        Assert.Contains(await context.WorldConsequences.ToArrayAsync(), value => value.Kind == WorldConsequenceKind.Faction);
+        Assert.Contains(await context.WorldConsequences.ToArrayAsync(), value => value.Kind == WorldConsequenceKind.Economy);
+        var causalPage = await new EfWorldEventRepository(context).SearchAsync(new WorldEventQuery(
+            world.Id, PageSize: 50, SortOrder: WorldEventSortOrder.OldestFirst, CorrelationId: root.EventId));
+        var chain = causalPage.Items.OrderBy(value => value.CausalityDepth).ToArray();
+        Assert.Contains(chain, value => value.CausalityDepth == 0 && value.Type == "ActorKilled");
+        Assert.Contains(chain, value => value.CausalityDepth == 1 && value.Type == "WorldConsequenceApplied");
+        Assert.Contains(chain, value => value.CausalityDepth == 2);
+        Assert.Contains(chain, value => value.CausalityDepth == 3);
+        Assert.All(chain.Where(value => value.CausalityDepth > 0), value => Assert.NotNull(value.CausationId));
     }
 
     [Theory]

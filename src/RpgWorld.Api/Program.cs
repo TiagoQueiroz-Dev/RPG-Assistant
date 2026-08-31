@@ -179,7 +179,7 @@ app.MapGet(
 app.MapGet(
     "/api/worlds/{worldId:guid}/events",
     async (HttpContext httpContext, Guid worldId, int? page, int? pageSize, string? type,
-        Guid? actorId, DateTimeOffset? fromUtc, DateTimeOffset? toUtc, int? x, int? y,
+        Guid? actorId, DateTimeOffset? fromUtc, DateTimeOffset? toUtc, int? x, int? y, Guid? correlationId,
         string? sort, IWorldEventService service, CancellationToken cancellationToken) =>
     {
         if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
@@ -188,7 +188,7 @@ app.MapGet(
         try
         {
             return Results.Ok(await service.SearchAsync(new WorldEventQuery(
-                worldId, page ?? 1, pageSize ?? 50, type, actorId, fromUtc, toUtc, x, y, sortOrder),
+                worldId, page ?? 1, pageSize ?? 50, type, actorId, fromUtc, toUtc, x, y, sortOrder, correlationId),
                 cancellationToken));
         }
         catch (KeyNotFoundException) { return Results.NotFound(); }

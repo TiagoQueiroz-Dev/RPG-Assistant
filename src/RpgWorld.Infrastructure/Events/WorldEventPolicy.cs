@@ -34,6 +34,7 @@ internal static class WorldEventPolicy
                 value.WorldId, null,
                 value.ConsumerKind == ResourceConsumerKind.Actor ? [value.ConsumerId] : []),
             ResourceSpawnedEvent value when value.SourceWorldEventId is null => new Metadata(value.WorldId, null, []),
+            WorldConsequenceAppliedEvent value => new Metadata(value.WorldId, null, []),
             _ => null
         };
         if (metadata is null) return null;
@@ -46,7 +47,10 @@ internal static class WorldEventPolicy
             domainEvent.OccurredAtUtc,
             metadata.Position,
             metadata.ActorIds,
-            JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), PayloadOptions));
+            JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), PayloadOptions),
+            correlationId: domainEvent.CorrelationId,
+            causationId: domainEvent.CausationId,
+            causalityDepth: domainEvent.CausalityDepth);
     }
 
     private static Guid[] Actors(Guid actorId, Guid? secondActorId) =>

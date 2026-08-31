@@ -13,6 +13,7 @@ public sealed class WorldEventService(IWorldEventRepository repository) : IWorld
         if (query.Page <= 0) throw new ArgumentOutOfRangeException(nameof(query.Page));
         if (query.PageSize is <= 0 or > 200) throw new ArgumentOutOfRangeException(nameof(query.PageSize));
         if (query.ActorId == Guid.Empty) throw new ArgumentException("Actor identifier cannot be empty.", nameof(query));
+        if (query.CorrelationId == Guid.Empty) throw new ArgumentException("Correlation identifier cannot be empty.", nameof(query));
         if (query.FromUtc > query.ToUtc) throw new ArgumentException("Timeline start cannot be after its end.", nameof(query));
         if (query.PositionX.HasValue != query.PositionY.HasValue || query.PositionX < 0 || query.PositionY < 0)
             throw new ArgumentException("Position requires valid X and Y coordinates.", nameof(query));
@@ -28,7 +29,10 @@ public sealed class WorldEventService(IWorldEventRepository repository) : IWorld
             item.Position is { } position ? new(position.X, position.Y) : null,
             item.ActorIds,
             ParsePayload(item.Payload),
-            item.PayloadVersion)).ToArray();
+            item.PayloadVersion,
+            item.CorrelationId,
+            item.CausationId,
+            item.CausalityDepth)).ToArray();
         var totalPages = result.TotalCount == 0 ? 0 : checked((int)Math.Ceiling(result.TotalCount / (decimal)result.PageSize));
         return new WorldEventTimelinePage(items, result.Page, result.PageSize, result.TotalCount, totalPages);
     }

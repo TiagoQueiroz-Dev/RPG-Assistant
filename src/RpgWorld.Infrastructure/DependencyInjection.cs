@@ -76,6 +76,14 @@ public static class DependencyInjection
         services.AddScoped<IFactionService, FactionService>();
         services.AddScoped<IWorldEventRepository, EfWorldEventRepository>();
         services.AddScoped<IWorldEventService, WorldEventService>();
+        services.AddScoped<IWorldConsequenceRepository, EfWorldConsequenceRepository>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledReputationConsequenceHandler>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledCrimeConsequenceHandler>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledFamilyConsequenceHandler>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledFactionConsequenceHandler>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledEconomyConsequenceHandler>();
+        services.AddScoped<IDomainEventHandler<WorldConsequenceAppliedEvent>, CrimeFactionEscalationHandler>();
+        services.AddScoped<IDomainEventHandler<WorldConsequenceAppliedEvent>, FactionEconomyEscalationHandler>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();
         effectiveNpcMemoryOptions.Validate();
         services.AddSingleton(effectiveNpcMemoryOptions);

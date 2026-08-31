@@ -53,6 +53,7 @@ public sealed class RpgWorldDbContext : DbContext
     public DbSet<Faction> Factions => Set<Faction>();
     public DbSet<FactionTerritoryTile> FactionTerritoryTiles => Set<FactionTerritoryTile>();
     public DbSet<WorldEvent> WorldEvents => Set<WorldEvent>();
+    public DbSet<WorldConsequence> WorldConsequences => Set<WorldConsequence>();
 
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 

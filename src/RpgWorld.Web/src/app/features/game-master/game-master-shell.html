@@ -249,6 +249,7 @@
             </div>
             <div role="cell">
               <span>Payload v{{ event.payloadVersion }}</span>
+              <small>Cadeia {{ event.correlationId }} Â· nÃ­vel {{ event.causalityDepth }}</small>
               @if (event.actors.length > 0) { <small>{{ event.actors.length }} ator(es)</small> }
               @if (event.position) { <small>PosiÃ§Ã£o {{ event.position.x }}, {{ event.position.y }}</small> }
             </div>

@@ -15,7 +15,8 @@ public sealed record WorldEventQuery(
     DateTimeOffset? ToUtc = null,
     int? PositionX = null,
     int? PositionY = null,
-    WorldEventSortOrder SortOrder = WorldEventSortOrder.NewestFirst);
+    WorldEventSortOrder SortOrder = WorldEventSortOrder.NewestFirst,
+    Guid? CorrelationId = null);
 
 public sealed record WorldEventPage(
     IReadOnlyList<WorldEvent> Items,
@@ -33,7 +34,10 @@ public sealed record WorldEventTimelineItem(
     WorldEventTimelinePosition? Position,
     IReadOnlyList<Guid> Actors,
     JsonElement Payload,
-    int PayloadVersion);
+    int PayloadVersion,
+    Guid CorrelationId,
+    Guid? CausationId,
+    int CausalityDepth);
 
 public sealed record WorldEventTimelinePage(
     IReadOnlyList<WorldEventTimelineItem> Items,

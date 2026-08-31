@@ -21,6 +21,8 @@ public sealed class EfWorldEventRepository(RpgWorldDbContext dbContext) : IWorld
         if (query.ToUtc is { } to) events = events.Where(worldEvent => worldEvent.TimestampUtc <= to.ToUniversalTime());
         if (query.PositionX is { } x && query.PositionY is { } y)
             events = events.Where(worldEvent => worldEvent.PositionX == x && worldEvent.PositionY == y);
+        if (query.CorrelationId is { } correlationId)
+            events = events.Where(worldEvent => worldEvent.CorrelationId == correlationId);
         var totalCount = await events.LongCountAsync(cancellationToken);
         events = query.SortOrder == WorldEventSortOrder.OldestFirst
             ? events.OrderBy(worldEvent => worldEvent.TimestampUtc).ThenBy(worldEvent => worldEvent.Id)

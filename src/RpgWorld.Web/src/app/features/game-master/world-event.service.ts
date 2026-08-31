@@ -11,6 +11,9 @@ export interface WorldEventTimelineItem {
   readonly actors: readonly string[];
   readonly payload: Readonly<Record<string, unknown>>;
   readonly payloadVersion: number;
+  readonly correlationId: string;
+  readonly causationId: string | null;
+  readonly causalityDepth: number;
 }
 
 export interface WorldEventTimelinePage {

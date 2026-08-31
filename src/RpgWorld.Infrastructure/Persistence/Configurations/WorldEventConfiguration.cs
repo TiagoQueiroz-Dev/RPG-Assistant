@@ -15,6 +15,11 @@ internal sealed class WorldEventConfiguration : IEntityTypeConfiguration<WorldEv
                 "(position_x IS NULL AND position_y IS NULL) OR " +
                 "(position_x IS NOT NULL AND position_y IS NOT NULL AND position_x >= 0 AND position_y >= 0)");
             table.HasCheckConstraint("ck_world_events_payload_version", "payload_version > 0");
+            table.HasCheckConstraint("ck_world_events_causality_depth", "causality_depth >= 0");
+            table.HasCheckConstraint("ck_world_events_correlation", "correlation_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+            table.HasCheckConstraint("ck_world_events_cause_depth",
+                "(causality_depth = 0 AND causation_id IS NULL) OR " +
+                "(causality_depth > 0 AND causation_id IS NOT NULL)");
         });
         builder.HasKey(worldEvent => worldEvent.Id);
         builder.Property(worldEvent => worldEvent.Id).HasColumnName("id").ValueGeneratedNever();
@@ -26,6 +31,9 @@ internal sealed class WorldEventConfiguration : IEntityTypeConfiguration<WorldEv
         builder.Property<List<Guid>>("_actorIds").HasColumnName("actor_ids").HasColumnType("uuid[]");
         builder.Property(worldEvent => worldEvent.Payload).HasColumnName("payload").HasColumnType("jsonb").IsRequired();
         builder.Property(worldEvent => worldEvent.PayloadVersion).HasColumnName("payload_version");
+        builder.Property(worldEvent => worldEvent.CorrelationId).HasColumnName("correlation_id");
+        builder.Property(worldEvent => worldEvent.CausationId).HasColumnName("causation_id");
+        builder.Property(worldEvent => worldEvent.CausalityDepth).HasColumnName("causality_depth");
         builder.Ignore(worldEvent => worldEvent.Position);
         builder.Ignore(worldEvent => worldEvent.ActorIds);
         builder.HasOne<World>().WithMany().HasForeignKey(worldEvent => worldEvent.WorldId).OnDelete(DeleteBehavior.Cascade);
@@ -36,5 +44,7 @@ internal sealed class WorldEventConfiguration : IEntityTypeConfiguration<WorldEv
         builder.HasIndex(worldEvent => new { worldEvent.WorldId, worldEvent.PositionX, worldEvent.PositionY })
             .HasDatabaseName("ix_world_events_world_position");
         builder.HasIndex("_actorIds").HasMethod("gin").HasDatabaseName("ix_world_events_actor_ids");
+        builder.HasIndex(worldEvent => new { worldEvent.WorldId, worldEvent.CorrelationId, worldEvent.CausalityDepth })
+            .HasDatabaseName("ix_world_events_correlation");
     }
 }

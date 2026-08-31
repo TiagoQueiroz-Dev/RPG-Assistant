@@ -21,7 +21,10 @@ public sealed class WorldEvent
         int? positionY,
         IEnumerable<Guid> actorIds,
         string payload,
-        int payloadVersion)
+        int payloadVersion,
+        Guid correlationId,
+        Guid? causationId,
+        int causalityDepth)
     {
         if (id == Guid.Empty) throw new ArgumentException("Event identifier is required.", nameof(id));
         if (worldId == Guid.Empty) throw new ArgumentException("World identifier is required.", nameof(worldId));
@@ -36,6 +39,11 @@ public sealed class WorldEvent
             throw new ArgumentException($"Payload is required and cannot exceed {MaximumPayloadLength} characters.", nameof(payload));
         using var _ = JsonDocument.Parse(payload);
         if (payloadVersion <= 0) throw new ArgumentOutOfRangeException(nameof(payloadVersion));
+        if (correlationId == Guid.Empty) throw new ArgumentException("Correlation identifier is required.", nameof(correlationId));
+        if (causationId == Guid.Empty) throw new ArgumentException("Causation identifier cannot be empty.", nameof(causationId));
+        if (causalityDepth < 0) throw new ArgumentOutOfRangeException(nameof(causalityDepth));
+        if ((causalityDepth == 0 && causationId is not null) || (causalityDepth > 0 && causationId is null))
+            throw new ArgumentException("Root events cannot have a cause and consequence events require one.", nameof(causationId));
         Id = id;
         WorldId = worldId;
         Type = type.Trim();
@@ -45,6 +53,9 @@ public sealed class WorldEvent
         _actorIds = actors.ToList();
         Payload = payload;
         PayloadVersion = payloadVersion;
+        CorrelationId = correlationId;
+        CausationId = causationId;
+        CausalityDepth = causalityDepth;
     }
 
     public Guid Id { get; private set; }
@@ -57,6 +68,9 @@ public sealed class WorldEvent
     public IReadOnlyList<Guid> ActorIds => _actorIds.ToArray();
     public string Payload { get; private set; } = "{}";
     public int PayloadVersion { get; private set; }
+    public Guid CorrelationId { get; private set; }
+    public Guid? CausationId { get; private set; }
+    public int CausalityDepth { get; private set; }
 
     public static WorldEvent Create(
         Guid id,
@@ -66,6 +80,10 @@ public sealed class WorldEvent
         WorldEventPosition? position,
         IEnumerable<Guid>? actorIds,
         string payload,
-        int payloadVersion = 1) =>
-        new(id, worldId, type, timestampUtc, position?.X, position?.Y, actorIds ?? [], payload, payloadVersion);
+        int payloadVersion = 1,
+        Guid? correlationId = null,
+        Guid? causationId = null,
+        int causalityDepth = 0) =>
+        new(id, worldId, type, timestampUtc, position?.X, position?.Y, actorIds ?? [], payload, payloadVersion,
+            correlationId ?? id, causationId, causalityDepth);
 }
