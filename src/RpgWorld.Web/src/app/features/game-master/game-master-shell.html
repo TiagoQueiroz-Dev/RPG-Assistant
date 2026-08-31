@@ -198,6 +198,9 @@
             <div role="cell">
               <span>Alimento</span><strong>{{ city.foodStockDays }} dias</strong>
               @if (city.wealth !== undefined) { <small>Riqueza {{ city.wealth }}</small> }
+              @if (city.foodPrice !== undefined) {
+                <small>Preço {{ city.foodPrice }} · {{ city.foodMarketCondition ?? 'Balanced' }}</small>
+              }
             </div>
           </div>
         }

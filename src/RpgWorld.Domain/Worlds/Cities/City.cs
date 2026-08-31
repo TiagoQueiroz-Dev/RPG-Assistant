@@ -13,6 +13,7 @@ public sealed class City : AggregateRoot
     private List<Guid> _residentActorIds = [];
     private List<Guid> _buildingIds = [];
     private Dictionary<string, decimal> _resourceStocks = [];
+    private Dictionary<string, CityResourceMarketSnapshot> _resourceMarkets = [];
     private List<CityHistoryEntry> _history = [];
 
     private City() { }
@@ -57,11 +58,15 @@ public sealed class City : AggregateRoot
     public DateTimeOffset UpdatedAtUtc { get; private set; }
     public DateTimeOffset? DestroyedAtUtc { get; private set; }
     public long Version { get; private set; }
+    public long EconomicCycleCount { get; private set; }
+    public DateTimeOffset? LastEconomicCycleAtUtc { get; private set; }
     public IReadOnlyList<CityTerritoryTile> TerritoryTiles => _territoryTiles.ToArray();
     public IReadOnlyList<Position> Territory => _territoryTiles.Select(tile => tile.Position).ToArray();
     public IReadOnlyList<Guid> ResidentActorIds => _residentActorIds.ToArray();
     public IReadOnlyList<Guid> BuildingIds => _buildingIds.ToArray();
     public IReadOnlyDictionary<string, decimal> ResourceStocks => new Dictionary<string, decimal>(_resourceStocks);
+    public IReadOnlyDictionary<string, CityResourceMarketSnapshot> ResourceMarkets =>
+        new Dictionary<string, CityResourceMarketSnapshot>(_resourceMarkets);
     public IReadOnlyList<CityHistoryEntry> History => _history
         .Select(entry => entry with { Metadata = new Dictionary<string, string>(entry.Metadata) })
         .ToArray();
@@ -163,6 +168,65 @@ public sealed class City : AggregateRoot
         Touch(occurredAtUtc);
     }
 
+    public CityEconomicCycleResult RunEconomicCycle(
+        IEnumerable<CityResourceEconomyRule> rules,
+        IReadOnlyDictionary<string, decimal> production,
+        DateTimeOffset occurredAtUtc)
+    {
+        EnsureActive();
+        ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(production);
+        var instant = occurredAtUtc.ToUniversalTime();
+        if (LastEconomicCycleAtUtc is { } last && instant <= last)
+            throw new ArgumentOutOfRangeException(nameof(occurredAtUtc), "Economic cycles must move forward in world time.");
+        var configuredRules = rules.ToArray();
+        if (configuredRules.Length == 0) throw new ArgumentException("At least one economy rule is required.", nameof(rules));
+        if (configuredRules.Select(rule => rule.ResourceCode).Distinct(StringComparer.Ordinal).Count() != configuredRules.Length)
+            throw new ArgumentException("Economy resource rules must be unique.", nameof(rules));
+        if (production.Any(entry => entry.Value < 0m))
+            throw new ArgumentOutOfRangeException(nameof(production), "Production cannot be negative.");
+
+        var markets = new List<CityResourceMarketSnapshot>(configuredRules.Length);
+        foreach (var rule in configuredRules.OrderBy(rule => rule.ResourceCode, StringComparer.Ordinal))
+        {
+            var code = rule.ResourceCode;
+            var openingStock = _resourceStocks.GetValueOrDefault(code);
+            var produced = production.GetValueOrDefault(code);
+            var available = checked(openingStock + produced);
+            var demand = checked(Population * rule.ConsumptionPerResident);
+            var consumed = Math.Min(available, demand);
+            var unmetDemand = demand - consumed;
+            var closingStock = available - consumed;
+            if (closingStock == 0m) _resourceStocks.Remove(code);
+            else _resourceStocks[code] = closingStock;
+
+            var targetStock = Math.Max(rule.TargetStockPerResident, Population * rule.TargetStockPerResident);
+            var coverage = closingStock / targetStock;
+            var priceMultiplier = coverage < 1m
+                ? 1m + ((1m - coverage) * (rule.MaximumPriceMultiplier - 1m))
+                : Math.Max(rule.MinimumPriceMultiplier, 1m / coverage);
+            var price = decimal.Round(rule.BasePrice * priceMultiplier, 2, MidpointRounding.AwayFromZero);
+            var condition = unmetDemand > 0m || coverage <= rule.CriticalStockRatio
+                ? CityMarketCondition.Shortage
+                : coverage >= rule.SurplusStockRatio
+                    ? CityMarketCondition.Surplus
+                    : CityMarketCondition.Balanced;
+            var previousCondition = _resourceMarkets.TryGetValue(code, out var previous)
+                ? previous.Condition
+                : CityMarketCondition.Balanced;
+            var market = new CityResourceMarketSnapshot(
+                code, openingStock, produced, demand, consumed, unmetDemand, closingStock, price, condition, instant);
+            _resourceMarkets[code] = market;
+            markets.Add(market);
+            RecordMarketTransition(previousCondition, market);
+        }
+
+        EconomicCycleCount = checked(EconomicCycleCount + 1);
+        LastEconomicCycleAtUtc = instant;
+        Touch(instant);
+        return new CityEconomicCycleResult(Id, EconomicCycleCount, instant, markets.ToArray());
+    }
+
     public void AddBuilding(Guid buildingId, DateTimeOffset occurredAtUtc)
     {
         EnsureActive();
@@ -240,6 +304,49 @@ public sealed class City : AggregateRoot
     private void EnsureActive()
     {
         if (Status == CityStatus.Destroyed) throw new InvalidOperationException("Destroyed city cannot change.");
+    }
+
+    private void RecordMarketTransition(
+        CityMarketCondition previousCondition,
+        CityResourceMarketSnapshot market)
+    {
+        if (market.Condition == previousCondition) return;
+        var metadata = new Dictionary<string, string>
+        {
+            ["resourceCode"] = market.ResourceCode,
+            ["closingStock"] = market.ClosingStock.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["unitPrice"] = market.UnitPrice.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        };
+        switch (market.Condition)
+        {
+            case CityMarketCondition.Shortage:
+                AddHistory(
+                    CityHistoryEventTypes.ResourceShortage,
+                    $"Critical shortage of {market.ResourceCode}.",
+                    market.UpdatedAtUtc,
+                    metadata);
+                RaiseDomainEvent(new CityResourceShortageEvent(
+                    Id, WorldId, market.ResourceCode, market.Demand, market.Consumed,
+                    market.ClosingStock, market.UnitPrice, market.UpdatedAtUtc));
+                break;
+            case CityMarketCondition.Surplus:
+                AddHistory(
+                    CityHistoryEventTypes.ResourceSurplus,
+                    $"Surplus of {market.ResourceCode}.",
+                    market.UpdatedAtUtc,
+                    metadata);
+                RaiseDomainEvent(new CityResourceSurplusEvent(
+                    Id, WorldId, market.ResourceCode, market.Produced,
+                    market.ClosingStock, market.UnitPrice, market.UpdatedAtUtc));
+                break;
+            case CityMarketCondition.Balanced:
+                AddHistory(
+                    CityHistoryEventTypes.EconomyBalanced,
+                    $"Supply of {market.ResourceCode} returned to balance.",
+                    market.UpdatedAtUtc,
+                    metadata);
+                break;
+        }
     }
 
     private void Touch(DateTimeOffset occurredAtUtc)

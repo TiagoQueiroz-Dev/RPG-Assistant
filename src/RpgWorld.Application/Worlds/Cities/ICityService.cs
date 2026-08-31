@@ -30,6 +30,9 @@ public sealed record CityMasterView(
     IReadOnlyList<Guid> ResidentActorIds,
     IReadOnlyList<Guid> BuildingIds,
     IReadOnlyDictionary<string, decimal> ResourceStocks,
+    IReadOnlyDictionary<string, CityResourceMarketSnapshot> ResourceMarkets,
+    long EconomicCycleCount,
+    DateTimeOffset? LastEconomicCycleAtUtc,
     IReadOnlyList<CityHistoryEntry> History,
     DateTimeOffset FoundedAtUtc,
     DateTimeOffset? DestroyedAtUtc);

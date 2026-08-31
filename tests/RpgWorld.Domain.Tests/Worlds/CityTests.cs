@@ -113,6 +113,70 @@ public sealed class CityTests
         Assert.Throws<InvalidOperationException>(() => city.CreditWealth(1m, now.AddHours(3)));
     }
 
+    [Fact]
+    public void Economic_cycles_consume_population_needs_and_change_stock_and_price()
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var (_, city) = CreateCity(initialPopulation: 10);
+        city.StoreResource("food", 5m, now.AddHours(1));
+        city.ClearDomainEvents();
+        var rule = new CityResourceEconomyRule(
+            "food", consumptionPerResident: 1m, basePrice: 2m, targetStockPerResident: 2m);
+
+        var shortage = city.RunEconomicCycle([rule], new Dictionary<string, decimal>(), now.AddHours(2));
+
+        var shortMarket = Assert.Single(shortage.Markets);
+        Assert.Equal(5m, shortMarket.OpeningStock);
+        Assert.Equal(10m, shortMarket.Demand);
+        Assert.Equal(5m, shortMarket.Consumed);
+        Assert.Equal(5m, shortMarket.UnmetDemand);
+        Assert.Equal(0m, shortMarket.ClosingStock);
+        Assert.Equal(8m, shortMarket.UnitPrice);
+        Assert.Equal(CityMarketCondition.Shortage, shortMarket.Condition);
+        Assert.IsType<CityResourceShortageEvent>(Assert.Single(city.DomainEvents));
+
+        city.ClearDomainEvents();
+        var surplus = city.RunEconomicCycle(
+            [rule],
+            new Dictionary<string, decimal> { ["food"] = 50m },
+            now.AddHours(3));
+
+        var surplusMarket = Assert.Single(surplus.Markets);
+        Assert.Equal(50m, surplusMarket.Produced);
+        Assert.Equal(40m, surplusMarket.ClosingStock);
+        Assert.Equal(1m, surplusMarket.UnitPrice);
+        Assert.Equal(CityMarketCondition.Surplus, surplusMarket.Condition);
+        Assert.IsType<CityResourceSurplusEvent>(Assert.Single(city.DomainEvents));
+        Assert.Equal(2, city.EconomicCycleCount);
+        Assert.Equal(now.AddHours(3), city.LastEconomicCycleAtUtc);
+        Assert.Equal(surplusMarket, city.ResourceMarkets["food"]);
+    }
+
+    [Fact]
+    public void Economic_rules_are_configurable_and_cycles_cannot_be_replayed()
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var (_, city) = CreateCity(initialPopulation: 4);
+        var customRule = new CityResourceEconomyRule(
+            "wood",
+            consumptionPerResident: 0.25m,
+            basePrice: 12m,
+            targetStockPerResident: 0.50m,
+            maximumPriceMultiplier: 3m);
+
+        var cycle = city.RunEconomicCycle(
+            [customRule],
+            new Dictionary<string, decimal> { ["wood"] = 2m },
+            now.AddHours(1));
+
+        var market = Assert.Single(cycle.Markets);
+        Assert.Equal(1m, market.Demand);
+        Assert.Equal(1m, market.ClosingStock);
+        Assert.Equal(24m, market.UnitPrice);
+        Assert.Throws<ArgumentOutOfRangeException>(() => city.RunEconomicCycle(
+            [customRule], new Dictionary<string, decimal>(), now.AddHours(1)));
+    }
+
     private static (World World, City City) CreateCity(int initialPopulation = 0)
     {
         var world = World.Create("City world", 8, 8);

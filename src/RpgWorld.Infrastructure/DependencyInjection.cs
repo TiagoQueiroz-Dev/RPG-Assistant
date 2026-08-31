@@ -67,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<INaturalResourceService, NaturalResourceService>();
         services.AddScoped<IDomainEventHandler<NaturalResourceEmergenceEvent>, NaturalResourceEmergenceHandler>();
         services.AddScoped<ICityRepository, EfCityRepository>();
+        services.AddScoped<ICityEconomyRepository, EfCityEconomyRepository>();
         services.AddScoped<ICityService, CityService>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();
         effectiveNpcMemoryOptions.Validate();

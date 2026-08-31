@@ -38,5 +38,8 @@ public static class CityHistoryEventTypes
     public const string Crisis = "crisis";
     public const string CrisisResolved = "crisis-resolved";
     public const string ResidentAssociated = "resident-associated";
+    public const string ResourceShortage = "resource-shortage";
+    public const string ResourceSurplus = "resource-surplus";
+    public const string EconomyBalanced = "economy-balanced";
     public const string Destroyed = "destroyed";
 }

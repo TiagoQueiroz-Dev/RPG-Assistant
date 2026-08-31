@@ -18,6 +18,7 @@ using RpgWorld.Domain.Actors.Traits;
 using RpgWorld.Modules.Default.Actors;
 using RpgWorld.Application.Actors.Inspection;
 using RpgWorld.Application.Worlds.Cities;
+using RpgWorld.Simulation.Worlds.Economy;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,7 +38,8 @@ builder.Services.AddSimulation(
                 entry => entry.Key,
                 entry => TimeSpan.Parse(entry.Value!, CultureInfo.InvariantCulture),
                 StringComparer.OrdinalIgnoreCase)
-    });
+    },
+    cityEconomyOptions: builder.Configuration.GetSection("CityEconomy").Get<CityEconomyOptions>());
 var frontendOrigins = builder.Configuration
     .GetSection("Frontend:AllowedOrigins")
     .GetChildren()

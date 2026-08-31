@@ -35,6 +35,7 @@ using RpgWorld.Domain.Worlds.Resources;
 using RpgWorld.Simulation.Worlds.Resources;
 using RpgWorld.Application.Worlds.Cities;
 using RpgWorld.Domain.Worlds.Cities;
+using RpgWorld.Simulation.Worlds.Economy;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -688,6 +689,80 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
                 now.AddDays(1)));
             Assert.NotEqual(cityId, successor.CityId);
         }
+    }
+
+    [Fact]
+    public async Task City_economy_extracts_territorial_deposit_and_persists_market_snapshot()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        var now = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Persistent economy", 8, 8);
+        var position = world.PositionAt(1, 1);
+        var tile = world.CreateTile(
+            position, "grassland", DefaultWorldDefinitions.Catalog, 0, 20m, 0.5m);
+        var city = City.Create(world, "Granary", position, [position], 10, 100m, now);
+        var deposit = ResourceDeposit.SpawnOnTile(
+            world,
+            tile,
+            DefaultWorldDefinitions.Catalog.ResolveResource("food"),
+            now,
+            initialQuantity: 50m);
+        deposit.Discover(Guid.NewGuid(), now.AddMinutes(1));
+        var cityId = city.Id;
+        var depositId = deposit.Id;
+
+        await using (var createContext = new RpgWorldDbContext(options))
+        {
+            await createContext.Database.MigrateAsync();
+            createContext.Worlds.Add(world);
+            createContext.Tiles.Add(tile);
+            createContext.Cities.Add(city);
+            createContext.ResourceDeposits.Add(deposit);
+            await createContext.SaveChangesAsync();
+        }
+
+        await using (var cycleContext = new RpgWorldDbContext(options))
+        {
+            var economyOptions = new CityEconomyOptions
+            {
+                Resources =
+                [
+                    new CityEconomyResourceOptions
+                    {
+                        ResourceCode = "food",
+                        NaturalResourceCode = "food",
+                        NaturalExtractionPerResident = 1m,
+                        ConsumptionPerResident = 1m,
+                        BasePrice = 2m,
+                        TargetStockPerResident = 2m
+                    }
+                ]
+            };
+            economyOptions.Validate();
+            var system = new CityEconomySimulationSystem(
+                new EfCityEconomyRepository(cycleContext), economyOptions);
+            var instant = now.AddHours(1);
+            await system.ExecuteAsync(new SimulationTickContext(
+                world.Id,
+                new WorldClockSnapshot(world.Id, instant, TimeSpan.FromHours(1), 1m, instant)));
+        }
+
+        await using var readContext = new RpgWorldDbContext(options);
+        var storedCity = await readContext.Cities.AsNoTracking().SingleAsync(candidate => candidate.Id == cityId);
+        var storedDeposit = await readContext.ResourceDeposits.AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == depositId);
+        var market = storedCity.ResourceMarkets["food"];
+        Assert.Equal(1, storedCity.EconomicCycleCount);
+        Assert.Equal(now.AddHours(1), storedCity.LastEconomicCycleAtUtc);
+        Assert.Equal(10m, market.Produced);
+        Assert.Equal(10m, market.Consumed);
+        Assert.Equal(CityMarketCondition.Shortage, market.Condition);
+        Assert.Equal(CityHistoryEventTypes.ResourceShortage, storedCity.History[^1].EventType);
+        Assert.Equal(44m, storedDeposit.Quantity);
+        Assert.Equal(ResourceConsumerKind.City, storedDeposit.LastConsumerKind);
+        Assert.Equal(cityId, storedDeposit.LastConsumerId);
     }
 
     [Theory]

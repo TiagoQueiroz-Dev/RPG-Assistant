@@ -172,6 +172,9 @@ public sealed class CityService(ICityRepository repository) : ICityService
         city.ResidentActorIds.ToArray(),
         city.BuildingIds.ToArray(),
         new Dictionary<string, decimal>(city.ResourceStocks),
+        new Dictionary<string, CityResourceMarketSnapshot>(city.ResourceMarkets),
+        city.EconomicCycleCount,
+        city.LastEconomicCycleAtUtc,
         city.History.ToArray(),
         city.FoundedAtUtc,
         city.DestroyedAtUtc);

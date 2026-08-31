@@ -11,6 +11,7 @@ using RpgWorld.Domain.Actors.Traits;
 using RpgWorld.Application.Actors.Housing;
 using RpgWorld.Simulation.Actors.Housing;
 using RpgWorld.Simulation.Worlds.Resources;
+using RpgWorld.Simulation.Worlds.Economy;
 
 namespace RpgWorld.Simulation;
 
@@ -22,7 +23,8 @@ public static class DependencyInjection
         SimulationEngineOptions? simulationEngineOptions = null,
         SimulationLevelOptions? simulationLevelOptions = null,
         UtilityAiOptions? utilityAiOptions = null,
-        NpcHousingOptions? npcHousingOptions = null)
+        NpcHousingOptions? npcHousingOptions = null,
+        CityEconomyOptions? cityEconomyOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -61,6 +63,10 @@ public static class DependencyInjection
         services.AddScoped<ISimulationSystem, NpcUtilityAiSimulationSystem>();
         services.AddScoped<ISimulationSystem, NpcMemoryRetentionSimulationSystem>();
         services.AddScoped<ISimulationSystem, NaturalResourceRegenerationSystem>();
+        var economyOptions = cityEconomyOptions ?? CityEconomyOptions.CreateDefault();
+        economyOptions.Validate();
+        services.AddSingleton(economyOptions);
+        services.AddScoped<ISimulationSystem, CityEconomySimulationSystem>();
         var housingOptions = npcHousingOptions ?? new NpcHousingOptions();
         housingOptions.Validate();
         services.AddSingleton(housingOptions);

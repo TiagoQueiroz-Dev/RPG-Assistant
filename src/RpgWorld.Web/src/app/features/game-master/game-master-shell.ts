@@ -182,6 +182,8 @@ export class GameMasterShell {
           foodStockDays: Math.floor((city.resourceStocks['food'] ?? 0) / Math.max(1, city.population)),
           status: city.status,
           wealth: city.wealth,
+          foodPrice: city.resourceMarkets['food']?.unitPrice,
+          foodMarketCondition: city.resourceMarkets['food']?.condition,
         })),
       })),
       error: () => this.world.update(world => ({ ...world, cities: [] })),
