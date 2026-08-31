@@ -33,7 +33,12 @@ public sealed class NpcMemoryEventRecorder(
                 ["damage"] = domainEvent.Damage.ToString(CultureInfo.InvariantCulture),
                 ["remainingHealth"] = domainEvent.RemainingHealth.ToString(CultureInfo.InvariantCulture)
             }));
-        npc.SetRelationship(sourceId, "enemy", -importance, domainEvent.OccurredAtUtc);
+        npc.ApplyRelationship(sourceId, new ActorRelationshipModifier(
+            NpcMemoryEventTypes.WasAttacked,
+            fear: importance,
+            respect: -importance / 3,
+            hatred: importance,
+            trust: -importance), domainEvent.OccurredAtUtc);
         await memories.SaveChangesAsync(cancellationToken);
     }
 
@@ -59,7 +64,12 @@ public sealed class NpcMemoryEventRecorder(
                 100,
                 domainEvent.OccurredAtUtc,
                 payload: new Dictionary<string, string> { ["victimId"] = domainEvent.ActorId.ToString() }));
-            tracked.SetRelationship(killerId, "enemy", -100, domainEvent.OccurredAtUtc);
+            tracked.ApplyRelationship(killerId, new ActorRelationshipModifier(
+                NpcMemoryEventTypes.FamilyMemberKilled,
+                fear: 60,
+                respect: -50,
+                hatred: 100,
+                trust: -100), domainEvent.OccurredAtUtc);
         }
         if (family.Length > 0) await memories.SaveChangesAsync(cancellationToken);
     }

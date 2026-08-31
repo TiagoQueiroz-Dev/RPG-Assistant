@@ -30,6 +30,29 @@ export interface NpcInspectorView {
   readonly factionId: string | null;
   readonly traits: readonly NpcTraitInspectorView[];
   readonly memories: readonly NpcMemoryInspectorView[];
+  readonly relationships: readonly ActorRelationshipInspectorView[];
+}
+
+export interface ActorRelationshipInspectorView {
+  readonly targetActorId: string;
+  readonly friendship: number;
+  readonly fear: number;
+  readonly respect: number;
+  readonly love: number;
+  readonly hatred: number;
+  readonly trust: number;
+  readonly history: readonly ActorRelationshipChangeView[];
+}
+
+export interface ActorRelationshipChangeView {
+  readonly occurredAt: string;
+  readonly reason: string;
+  readonly friendship: number;
+  readonly fear: number;
+  readonly respect: number;
+  readonly love: number;
+  readonly hatred: number;
+  readonly trust: number;
 }
 
 export interface NpcMemoryInspectorView {

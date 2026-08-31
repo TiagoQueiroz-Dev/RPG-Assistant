@@ -27,7 +27,10 @@ public sealed class NpcMemoryEventHandlerTests
         Assert.Equal(NpcMemoryEventTypes.WasAttacked, memory.EventType);
         Assert.Equal(45, memory.Importance);
         Assert.NotNull(memory.ExpiresAt);
-        Assert.Equal(-45, npc.Relationships.Single(relationship => relationship.ActorId == attackerId).Affinity);
+        var relationship = npc.Relationships.Single(candidate => candidate.ActorId == attackerId);
+        Assert.Equal(45, relationship.Fear);
+        Assert.Equal(45, relationship.Hatred);
+        Assert.Equal(-45, relationship.Trust);
         Assert.Equal(1, memories.SaveCalls);
     }
 
@@ -53,7 +56,9 @@ public sealed class NpcMemoryEventHandlerTests
         Assert.Equal(NpcMemoryEventTypes.FamilyMemberKilled, memory.EventType);
         Assert.Equal(100, memory.Importance);
         Assert.Null(memory.ExpiresAt);
-        Assert.Equal(-100, relative.Relationships.Single(relationship => relationship.ActorId == killerId).Affinity);
+        var relationship = relative.Relationships.Single(candidate => candidate.ActorId == killerId);
+        Assert.Equal(100, relationship.Hatred);
+        Assert.Equal(-100, relationship.Trust);
     }
 
     private sealed class FakeActorRepository(params Actor[] actors) : IActorRepository

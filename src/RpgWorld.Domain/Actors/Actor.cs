@@ -133,8 +133,21 @@ public abstract class Actor : AggregateRoot
         EnsureAlive();
         if (actorId == Id) throw new ArgumentException("Actor cannot relate to itself.", nameof(actorId));
         var relationship = new ActorRelationship(actorId, kind, affinity);
-        _relationships.RemoveAll(entry => entry.ActorId == actorId && string.Equals(entry.Kind, relationship.Kind, StringComparison.OrdinalIgnoreCase));
+        _relationships.RemoveAll(entry => entry.ActorId == actorId);
         _relationships.Add(relationship);
+        Touch(occurredAtUtc);
+    }
+
+    public void ApplyRelationship(Guid actorId, ActorRelationshipModifier modifier, DateTimeOffset occurredAtUtc)
+    {
+        EnsureAlive();
+        if (actorId == Guid.Empty || actorId == Id) throw new ArgumentException("Related actor is invalid.", nameof(actorId));
+        ArgumentNullException.ThrowIfNull(modifier);
+        var current = _relationships.LastOrDefault(entry => entry.ActorId == actorId)
+            ?? ActorRelationship.Neutral(actorId);
+        var updated = current.Apply(modifier, occurredAtUtc);
+        _relationships.RemoveAll(entry => entry.ActorId == actorId);
+        _relationships.Add(updated);
         Touch(occurredAtUtc);
     }
 

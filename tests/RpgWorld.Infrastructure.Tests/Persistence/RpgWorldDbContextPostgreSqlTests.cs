@@ -327,7 +327,10 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         var memory = await context.NpcMemories.SingleAsync(candidate => candidate.ActorId == npc.Id);
         var storedNpc = Assert.IsType<NpcActor>(await context.Actors.SingleAsync(actor => actor.Id == npc.Id));
         Assert.Equal(NpcMemoryEventTypes.WasAttacked, memory.EventType);
-        Assert.Equal(-45, storedNpc.Relationships.Single(relationship => relationship.ActorId == attacker.Id).Affinity);
+        var relationship = storedNpc.Relationships.Single(candidate => candidate.ActorId == attacker.Id);
+        Assert.Equal(45, relationship.Fear);
+        Assert.Equal(45, relationship.Hatred);
+        Assert.Equal(NpcMemoryEventTypes.WasAttacked, Assert.Single(relationship.History).Reason);
     }
 
     [Fact]

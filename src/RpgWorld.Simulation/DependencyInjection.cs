@@ -51,6 +51,7 @@ public static class DependencyInjection
         services.TryAddSingleton<ITraitDefinitionCatalog>(new TraitDefinitionCatalog([]));
         services.AddSingleton<INpcUtilityScoreModifier, TraitUtilityScoreModifier>();
         services.AddSingleton<INpcUtilityScoreModifier, MemoryUtilityScoreModifier>();
+        services.AddSingleton<INpcUtilityScoreModifier, RelationshipUtilityScoreModifier>();
         services.AddSingleton<INpcUtilityDecisionService, NpcUtilityDecisionService>();
         services.AddSingleton<INpcDecisionDiagnostics, NpcDecisionDiagnostics>();
         services.AddScoped<ISimulationSystem, NpcUtilityAiSimulationSystem>();

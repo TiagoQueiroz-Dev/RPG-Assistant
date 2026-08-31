@@ -17,13 +17,17 @@ public sealed class DefaultNpcDecisionContextProvider(UtilityAiOptions options) 
             1m);
         var enemies = npc.Relationships
             .Where(relationship =>
-                relationship.Affinity < 0 &&
-                (string.Equals(relationship.Kind, "enemy", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(relationship.Kind, "hostile", StringComparison.OrdinalIgnoreCase)))
+                relationship.Hatred > 0 ||
+                relationship.Fear > 0 ||
+                (relationship.Affinity < 0 &&
+                 (string.Equals(relationship.Kind, "enemy", StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(relationship.Kind, "hostile", StringComparison.OrdinalIgnoreCase))))
             .ToArray();
         var enemyThreat = enemies.Length == 0
             ? 0m
-            : enemies.Max(relationship => Math.Abs(relationship.Affinity)) / 100m;
+            : enemies.Max(relationship => Math.Max(
+                Math.Max(relationship.Hatred, relationship.Fear),
+                Math.Abs(relationship.Affinity))) / 100m;
         var hostileMemoryThreat = (memories ?? [])
             .Where(memory => memory.EventType is
                 NpcMemoryEventTypes.WasAttacked or

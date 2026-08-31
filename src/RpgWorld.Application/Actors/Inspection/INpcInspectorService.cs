@@ -1,3 +1,5 @@
+using RpgWorld.Domain.Actors;
+
 namespace RpgWorld.Application.Actors.Inspection;
 
 public interface INpcInspectorService
@@ -36,6 +38,16 @@ public sealed record NpcMemoryInspectorView(
     DateTimeOffset? ExpiresAt,
     IReadOnlyDictionary<string, string> Payload);
 
+public sealed record ActorRelationshipInspectorView(
+    Guid TargetActorId,
+    int Friendship,
+    int Fear,
+    int Respect,
+    int Love,
+    int Hatred,
+    int Trust,
+    IReadOnlyList<ActorRelationshipChange> History);
+
 public sealed record NpcInspectorView(
     Guid ActorId,
     Guid WorldId,
@@ -51,4 +63,5 @@ public sealed record NpcInspectorView(
     string? CurrentAction,
     Guid? FactionId,
     IReadOnlyList<NpcTraitInspectorView> Traits,
-    IReadOnlyList<NpcMemoryInspectorView> Memories);
+    IReadOnlyList<NpcMemoryInspectorView> Memories,
+    IReadOnlyList<ActorRelationshipInspectorView> Relationships);

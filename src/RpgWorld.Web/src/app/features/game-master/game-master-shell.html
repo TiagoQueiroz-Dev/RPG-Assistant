@@ -136,6 +136,25 @@
           <p class="inspector-state">Nenhuma memória relevante retida.</p>
         }
       </section>
+      <section class="relationship-history" aria-label="Relações dirigidas do NPC">
+        <h3>Relações</h3>
+        @for (relationship of npc.relationships; track relationship.targetActorId) {
+          <article>
+            <strong>{{ relationship.targetActorId }}</strong>
+            <div>
+              <span>Amizade {{ relationship.friendship }}</span>
+              <span>Medo {{ relationship.fear }}</span>
+              <span>Respeito {{ relationship.respect }}</span>
+              <span>Amor {{ relationship.love }}</span>
+              <span>Ódio {{ relationship.hatred }}</span>
+              <span>Confiança {{ relationship.trust }}</span>
+            </div>
+            <small>{{ relationship.history.length }} alterações registradas</small>
+          </article>
+        } @empty {
+          <p class="inspector-state">Nenhuma relação dirigida registrada.</p>
+        }
+      </section>
     } @else {
       <p class="inspector-state">Selecione um tile com NPCs ou informe o ID de um NPC.</p>
     }

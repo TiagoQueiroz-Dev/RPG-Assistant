@@ -316,6 +316,7 @@ public sealed class DemoWorldMapEndpointTests
                     100,
                     DateTimeOffset.UnixEpoch,
                     null,
-                    new Dictionary<string, string>())]));
+                    new Dictionary<string, string>())],
+                []));
     }
 }

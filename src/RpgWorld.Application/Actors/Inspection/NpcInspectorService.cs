@@ -63,7 +63,16 @@ public sealed class NpcInspectorService(
                 memory.Importance,
                 memory.CreatedAt,
                 memory.ExpiresAt,
-                memory.Payload)).ToArray());
+                memory.Payload)).ToArray(),
+            npc.Relationships.Select(relationship => new ActorRelationshipInspectorView(
+                relationship.ActorId,
+                relationship.Friendship,
+                relationship.Fear,
+                relationship.Respect,
+                relationship.Love,
+                relationship.Hatred,
+                relationship.Trust,
+                relationship.History)).ToArray());
     }
 
     private NpcTraitInspectorView ToView(string code) =>
