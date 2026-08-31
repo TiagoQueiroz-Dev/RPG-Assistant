@@ -19,6 +19,8 @@ using RpgWorld.Modules.Default.Actors;
 using RpgWorld.Application.Actors.Inspection;
 using RpgWorld.Application.Worlds.Cities;
 using RpgWorld.Simulation.Worlds.Economy;
+using RpgWorld.Application.Worlds.Factions;
+using RpgWorld.Domain.Worlds.Factions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -160,6 +162,162 @@ app.MapPost(
                 body.GoverningFactionId,
                 body.ResidentActorIds), cancellationToken);
             return Results.Created($"/api/cities/{created.CityId}", created);
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapGet(
+    "/api/worlds/{worldId:guid}/factions",
+    async (Guid worldId, IFactionService service, CancellationToken cancellationToken) =>
+        Results.Ok(await service.ListByWorldAsync(worldId, cancellationToken)));
+
+app.MapGet(
+    "/api/factions/{factionId:guid}",
+    async (Guid factionId, IFactionService service, CancellationToken cancellationToken) =>
+        await service.GetAsync(factionId, cancellationToken) is { } faction
+            ? Results.Ok(faction)
+            : Results.NotFound());
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/factions",
+    async (HttpContext httpContext, Guid worldId, CreateFactionApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        if (!Enum.TryParse<FactionType>(body.Type, ignoreCase: true, out var type))
+            return Results.BadRequest(new { error = "Unknown faction type." });
+        try
+        {
+            var created = await service.CreateAsync(new CreateFactionRequest(
+                worldId,
+                body.Name,
+                type,
+                body.LeaderActorId,
+                body.InitialWealth,
+                body.InitialMilitaryPower,
+                body.CreatedAtUtc,
+                body.Territory?.Select(cell => new FactionTerritoryPosition(cell.X, cell.Y)).ToArray()),
+                cancellationToken);
+            return Results.Created($"/api/factions/{created.FactionId}", created);
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/factions/{factionId:guid}/members/{actorId:guid}",
+    async (HttpContext httpContext, Guid worldId, Guid factionId, Guid actorId, FactionOccurredAtApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+            if (faction.WorldId != worldId) return Results.BadRequest(new { error = "Faction does not belong to this world." });
+            return Results.Ok(await service.AddMemberAsync(factionId, actorId, body.OccurredAtUtc, cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/factions/{factionId:guid}/members/{actorId:guid}/remove",
+    async (HttpContext httpContext, Guid worldId, Guid factionId, Guid actorId, FactionReasonApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+            if (faction.WorldId != worldId) return Results.BadRequest(new { error = "Faction does not belong to this world." });
+            return Results.Ok(await service.RemoveMemberAsync(
+                factionId, actorId, body.Reason, body.OccurredAtUtc, cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPut(
+    "/api/worlds/{worldId:guid}/factions/{factionId:guid}/leader",
+    async (HttpContext httpContext, Guid worldId, Guid factionId, ChangeFactionLeaderApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+            if (faction.WorldId != worldId) return Results.BadRequest(new { error = "Faction does not belong to this world." });
+            return Results.Ok(await service.ChangeLeaderAsync(
+                factionId, body.NewLeaderActorId, body.Reason, body.OccurredAtUtc, cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/factions/{factionId:guid}/cities/{cityId:guid}",
+    async (HttpContext httpContext, Guid worldId, Guid factionId, Guid cityId, AssociateFactionCityApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+            if (faction.WorldId != worldId) return Results.BadRequest(new { error = "Faction does not belong to this world." });
+            return Results.Ok(await service.AssociateCityAsync(
+                factionId, cityId, body.ClaimCityTerritory, body.OccurredAtUtc, cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/factions/{factionId:guid}/wealth",
+    async (HttpContext httpContext, Guid worldId, Guid factionId, AdjustFactionWealthApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+            if (faction.WorldId != worldId) return Results.BadRequest(new { error = "Faction does not belong to this world." });
+            return Results.Ok(await service.AdjustWealthAsync(
+                factionId, body.Delta, body.Reason, body.OccurredAtUtc, cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or OverflowException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPut(
+    "/api/worlds/{worldId:guid}/factions/{factionId:guid}/military-power",
+    async (HttpContext httpContext, Guid worldId, Guid factionId, SetFactionPowerApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+            if (faction.WorldId != worldId) return Results.BadRequest(new { error = "Faction does not belong to this world." });
+            return Results.Ok(await service.SetMilitaryPowerAsync(
+                factionId, body.Value, body.Reason, body.OccurredAtUtc, cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/factions/{factionId:guid}/dissolve",
+    async (HttpContext httpContext, Guid worldId, Guid factionId, FactionReasonApiRequest body, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+            if (faction.WorldId != worldId) return Results.BadRequest(new { error = "Faction does not belong to this world." });
+            return Results.Ok(await service.DissolveAsync(
+                factionId, body.Reason, body.OccurredAtUtc, cancellationToken));
         }
         catch (KeyNotFoundException) { return Results.NotFound(); }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -446,6 +604,24 @@ record CreateCityApiRequest(
     DateTimeOffset FoundedAtUtc,
     Guid? GoverningFactionId,
     Guid[]? ResidentActorIds);
+
+record FactionTerritoryApiPosition(int X, int Y);
+
+record CreateFactionApiRequest(
+    string Name,
+    string Type,
+    Guid LeaderActorId,
+    decimal InitialWealth,
+    decimal InitialMilitaryPower,
+    DateTimeOffset CreatedAtUtc,
+    FactionTerritoryApiPosition[]? Territory);
+
+record FactionOccurredAtApiRequest(DateTimeOffset OccurredAtUtc);
+record FactionReasonApiRequest(string Reason, DateTimeOffset OccurredAtUtc);
+record ChangeFactionLeaderApiRequest(Guid NewLeaderActorId, string Reason, DateTimeOffset OccurredAtUtc);
+record AssociateFactionCityApiRequest(bool ClaimCityTerritory, DateTimeOffset OccurredAtUtc);
+record AdjustFactionWealthApiRequest(decimal Delta, string Reason, DateTimeOffset OccurredAtUtc);
+record SetFactionPowerApiRequest(decimal Value, string Reason, DateTimeOffset OccurredAtUtc);
 
 public partial class Program
 {

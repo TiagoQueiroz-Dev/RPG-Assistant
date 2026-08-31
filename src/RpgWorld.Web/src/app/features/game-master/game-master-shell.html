@@ -220,7 +220,11 @@
             <span class="faction-mark" [class.hostile]="faction.disposition === 'hostile'"></span>
             <p>
               <strong>{{ faction.name }}</strong
-              ><small>Poder {{ faction.power }}/100</small>
+              ><small>{{ faction.type ?? 'Faction' }} · {{ faction.status ?? 'Active' }}</small>
+              <small>Poder {{ faction.power }} · {{ faction.memberCount ?? 0 }} membros</small>
+              @if (faction.wealth !== undefined) {
+                <small>Riqueza {{ faction.wealth }} · {{ faction.territorySize ?? 0 }} tiles</small>
+              }
             </p>
             <span class="disposition">{{ faction.disposition }}</span>
           </div>

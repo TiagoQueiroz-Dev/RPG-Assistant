@@ -89,6 +89,7 @@ public sealed class CityTests
     {
         var now = DateTimeOffset.UnixEpoch;
         var (_, city) = CreateCity(initialPopulation: 20);
+        city.SetGoverningFaction(Guid.NewGuid(), now.AddMinutes(30));
         city.ClearDomainEvents();
 
         city.BeginCrisis("Food shortage", 80, now.AddHours(1));
@@ -110,7 +111,11 @@ public sealed class CityTests
         Assert.Equal([CityHistoryEventTypes.Founded, CityHistoryEventTypes.Crisis, CityHistoryEventTypes.Destroyed],
             city.History.Select(entry => entry.EventType));
         Assert.Equal("20", city.History[^1].Metadata["finalPopulation"]);
-        Assert.Throws<InvalidOperationException>(() => city.CreditWealth(1m, now.AddHours(3)));
+        city.SetGoverningFaction(null, now.AddHours(3));
+        Assert.Null(city.GoverningFactionId);
+        Assert.Throws<InvalidOperationException>(() =>
+            city.SetGoverningFaction(Guid.NewGuid(), now.AddHours(4)));
+        Assert.Throws<InvalidOperationException>(() => city.CreditWealth(1m, now.AddHours(4)));
     }
 
     [Fact]

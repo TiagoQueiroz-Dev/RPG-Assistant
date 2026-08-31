@@ -253,7 +253,8 @@ public sealed class City : AggregateRoot
 
     public void SetGoverningFaction(Guid? factionId, DateTimeOffset occurredAtUtc)
     {
-        EnsureActive();
+        if (Status == CityStatus.Destroyed && factionId is not null)
+            throw new InvalidOperationException("Destroyed city cannot be assigned to a faction.");
         if (factionId == Guid.Empty) throw new ArgumentException("Faction identifier cannot be empty.", nameof(factionId));
         GoverningFactionId = factionId;
         Touch(occurredAtUtc);

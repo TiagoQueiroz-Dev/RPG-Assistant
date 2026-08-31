@@ -95,6 +95,16 @@ public sealed class DemoWorldMapEndpointTests
                 initialWealth = 0,
                 foundedAtUtc = DateTimeOffset.UnixEpoch
             }),
+            JsonRequest(HttpMethod.Post, $"/api/worlds/{worldId}/factions", new
+            {
+                name = "Unauthorized faction",
+                type = "Guild",
+                leaderActorId = Guid.NewGuid(),
+                initialWealth = 0,
+                initialMilitaryPower = 0,
+                createdAtUtc = DateTimeOffset.UnixEpoch,
+                territory = Array.Empty<object>()
+            }),
             JsonRequest(HttpMethod.Put, $"/api/worlds/{worldId}/clock/configuration", new { tickDurationSeconds = 60, realTimeMultiplier = 1 }),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/time/pause"),
             new HttpRequestMessage(HttpMethod.Post, $"/api/worlds/{worldId}/time/resume"),

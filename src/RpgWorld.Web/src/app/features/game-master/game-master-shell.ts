@@ -6,6 +6,7 @@ import { WorldMapTileView } from '../map/models/world-map-view';
 import { NpcInspectorService } from './npc-inspector.service';
 import { ActorAtPositionView, NpcInspectorView, NpcTraitInspectorView } from './models/npc-inspector-view';
 import { CityService } from './city.service';
+import { FactionService } from './faction.service';
 
 @Component({
   selector: 'app-game-master-shell',
@@ -18,6 +19,7 @@ export class GameMasterShell {
   private readonly importer = inject(WorldImportService);
   private readonly npcInspector = inject(NpcInspectorService);
   private readonly cities = inject(CityService);
+  private readonly factions = inject(FactionService);
 
   protected readonly importState = signal<'idle' | 'uploading' | 'completed' | 'error'>('idle');
   protected readonly importMessage = signal('PNG, JPG ou WEBP · até 10 MB');
@@ -66,6 +68,7 @@ export class GameMasterShell {
       next: result => {
         this.world.update(world => ({ ...world, worldId: result.worldId, name: result.name }));
         this.loadCities(result.worldId);
+        this.loadFactions(result.worldId);
         this.importState.set('completed');
         this.importMessage.set(
           `${result.tileCount} tiles em ${result.chunkCount} chunks · ${result.imageFormat.toUpperCase()}`,
@@ -187,6 +190,26 @@ export class GameMasterShell {
         })),
       })),
       error: () => this.world.update(world => ({ ...world, cities: [] })),
+    });
+  }
+
+  private loadFactions(worldId: string): void {
+    this.factions.list(worldId).subscribe({
+      next: factions => this.world.update(world => ({
+        ...world,
+        factions: factions.map(faction => ({
+          factionId: faction.factionId,
+          name: faction.name,
+          power: faction.militaryPower,
+          disposition: 'neutral',
+          type: faction.type,
+          status: faction.status,
+          wealth: faction.wealth,
+          memberCount: faction.memberActorIds.length,
+          territorySize: faction.territory.length,
+        })),
+      })),
+      error: () => this.world.update(world => ({ ...world, factions: [] })),
     });
   }
 }

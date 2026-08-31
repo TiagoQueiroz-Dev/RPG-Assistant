@@ -36,6 +36,8 @@ using RpgWorld.Simulation.Worlds.Resources;
 using RpgWorld.Application.Worlds.Cities;
 using RpgWorld.Domain.Worlds.Cities;
 using RpgWorld.Simulation.Worlds.Economy;
+using RpgWorld.Application.Worlds.Factions;
+using RpgWorld.Domain.Worlds.Factions;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -763,6 +765,80 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal(44m, storedDeposit.Quantity);
         Assert.Equal(ResourceConsumerKind.City, storedDeposit.LastConsumerKind);
         Assert.Equal(cityId, storedDeposit.LastConsumerId);
+    }
+
+    [Fact]
+    public async Task Faction_lifecycle_persists_members_leadership_city_territory_and_history()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        var now = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Persistent factions", 8, 8);
+        var firstPosition = world.PositionAt(1, 1);
+        var secondPosition = world.PositionAt(2, 1);
+        var firstTile = world.CreateTile(
+            firstPosition, "grassland", DefaultWorldDefinitions.Catalog, 0, 20m, 0.5m);
+        var secondTile = world.CreateTile(
+            secondPosition, "grassland", DefaultWorldDefinitions.Catalog, 0, 20m, 0.5m);
+        var founder = NpcActor.Create("Founder", world, firstPosition, now);
+        var successor = NpcActor.Create("Successor", world, secondPosition, now);
+        var city = City.Create(
+            world, "Capital", firstPosition, [firstPosition, secondPosition], 20, 100m, now);
+        Guid factionId;
+
+        await using (var createContext = new RpgWorldDbContext(options))
+        {
+            await createContext.Database.MigrateAsync();
+            createContext.AddRange(world, firstTile, secondTile, founder, successor, city);
+            await createContext.SaveChangesAsync();
+            var service = new FactionService(new EfFactionRepository(createContext));
+            var created = await service.CreateAsync(new CreateFactionRequest(
+                world.Id,
+                "Amber Crown",
+                FactionType.Kingdom,
+                founder.Id,
+                500m,
+                80m,
+                now.AddHours(1),
+                [new(1, 1)]));
+            await service.AddMemberAsync(created.FactionId, successor.Id, now.AddHours(2));
+            await service.AssociateCityAsync(
+                created.FactionId, city.Id, claimCityTerritory: true, now.AddHours(3));
+            await service.ChangeLeaderAsync(
+                created.FactionId, successor.Id, "Peaceful succession.", now.AddHours(4));
+            factionId = created.FactionId;
+        }
+
+        await using (var queryContext = new RpgWorldDbContext(options))
+        {
+            var service = new FactionService(new EfFactionRepository(queryContext));
+            var persisted = await service.GetAsync(factionId);
+            Assert.NotNull(persisted);
+            Assert.Equal(FactionType.Kingdom.ToString(), persisted.Type);
+            Assert.Equal(successor.Id, persisted.LeaderActorId);
+            Assert.Equal([founder.Id, successor.Id], persisted.MemberActorIds);
+            Assert.Equal(city.Id, Assert.Single(persisted.ControlledCityIds));
+            Assert.Equal(2, persisted.Territory.Count);
+            Assert.Equal(500m, persisted.Wealth);
+            Assert.Equal(80m, persisted.MilitaryPower);
+            await service.DissolveAsync(factionId, "The kingdom fragmented.", now.AddHours(5));
+        }
+
+        await using var readContext = new RpgWorldDbContext(options);
+        var storedFaction = await readContext.Factions.AsNoTracking().Include("_territoryTiles")
+            .SingleAsync(faction => faction.Id == factionId);
+        var storedMembers = await readContext.Actors.AsNoTracking()
+            .Where(actor => actor.Id == founder.Id || actor.Id == successor.Id)
+            .ToArrayAsync();
+        var storedCity = await readContext.Cities.AsNoTracking().SingleAsync(candidate => candidate.Id == city.Id);
+        Assert.Equal(FactionStatus.Dissolved, storedFaction.Status);
+        Assert.Null(storedFaction.LeaderActorId);
+        Assert.All(storedMembers, actor => Assert.Null(actor.FactionId));
+        Assert.Null(storedCity.GoverningFactionId);
+        Assert.All(storedFaction.TerritoryTiles, tile => Assert.False(tile.IsActive));
+        Assert.Equal(FactionHistoryEventTypes.Dissolved, storedFaction.History[^1].EventType);
+        Assert.Contains(storedFaction.History, entry => entry.EventType == FactionHistoryEventTypes.LeaderChanged);
     }
 
     [Theory]

@@ -9,6 +9,7 @@ using RpgWorld.Domain.Actors.Memories;
 using RpgWorld.Domain.Actors.Housing;
 using RpgWorld.Domain.Worlds.Resources;
 using RpgWorld.Domain.Worlds.Cities;
+using RpgWorld.Domain.Worlds.Factions;
 
 namespace RpgWorld.Infrastructure.Persistence;
 
@@ -47,6 +48,8 @@ public sealed class RpgWorldDbContext : DbContext
     public DbSet<ResourceDeposit> ResourceDeposits => Set<ResourceDeposit>();
     public DbSet<City> Cities => Set<City>();
     public DbSet<CityTerritoryTile> CityTerritoryTiles => Set<CityTerritoryTile>();
+    public DbSet<Faction> Factions => Set<Faction>();
+    public DbSet<FactionTerritoryTile> FactionTerritoryTiles => Set<FactionTerritoryTile>();
 
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 

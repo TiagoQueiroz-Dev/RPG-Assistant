@@ -25,4 +25,9 @@ export interface AdminFactionSummary {
   readonly name: string;
   readonly power: number;
   readonly disposition: 'allied' | 'neutral' | 'hostile';
+  readonly type?: string;
+  readonly status?: 'Active' | 'Dissolved';
+  readonly wealth?: number;
+  readonly memberCount?: number;
+  readonly territorySize?: number;
 }

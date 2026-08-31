@@ -141,6 +141,14 @@ public abstract class Actor : AggregateRoot
         Touch(occurredAtUtc);
     }
 
+    public void LeaveFaction(Guid factionId, DateTimeOffset occurredAtUtc)
+    {
+        if (factionId == Guid.Empty) throw new ArgumentException("Faction is required.", nameof(factionId));
+        if (FactionId != factionId) throw new InvalidOperationException("Actor does not belong to this faction.");
+        FactionId = null;
+        Touch(occurredAtUtc);
+    }
+
     public void SetReputation(Guid factionId, int value, DateTimeOffset occurredAtUtc)
     {
         EnsureAlive();
