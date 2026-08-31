@@ -13,7 +13,21 @@ internal sealed class ActorConfiguration : IEntityTypeConfiguration<Actor>
 
     public void Configure(EntityTypeBuilder<Actor> builder)
     {
-        builder.ToTable("actors");
+        builder.ToTable("actors", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_actors_npc_hunger",
+                "actor_type <> 'npc' OR (hunger IS NOT NULL AND hunger BETWEEN 0 AND 100)");
+            table.HasCheckConstraint(
+                "ck_actors_npc_energy",
+                "actor_type <> 'npc' OR (energy IS NOT NULL AND energy BETWEEN 0 AND 100)");
+            table.HasCheckConstraint(
+                "ck_actors_npc_money",
+                "actor_type <> 'npc' OR (money IS NOT NULL AND money >= 0)");
+            table.HasCheckConstraint(
+                "ck_actors_npc_state_required",
+                "actor_type <> 'npc' OR (needs_updated_at IS NOT NULL AND family_ids IS NOT NULL AND goals IS NOT NULL)");
+        });
         builder.HasKey(actor => actor.Id);
         builder.Property(actor => actor.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(actor => actor.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
@@ -54,7 +68,7 @@ internal sealed class ActorConfiguration : IEntityTypeConfiguration<Actor>
         builder.HasOne<World>().WithMany().HasForeignKey(actor => actor.WorldId).OnDelete(DeleteBehavior.Cascade);
     }
 
-    private static void ConfigureJson<T>(PropertyBuilder<T> property, string columnName)
+    internal static void ConfigureJson<T>(PropertyBuilder<T> property, string columnName)
         where T : class
     {
         property.HasColumnName(columnName)

@@ -50,6 +50,7 @@ public static class DependencyInjection
         services.AddScoped<IRegionSimulationRepository, EfRegionSimulationRepository>();
         services.AddScoped<IActorRepository, EfActorRepository>();
         services.AddScoped<IActorMovementStore, EfActorMovementStore>();
+        services.AddScoped<INpcNeedsRepository, EfNpcNeedsRepository>();
 
         AddCaching(services, configuration);
 

@@ -200,6 +200,56 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Npc_daily_state_survives_restart_and_supports_urgent_utility_queries()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        var start = new DateTimeOffset(2026, 8, 31, 6, 0, 0, TimeSpan.Zero);
+        var familyMemberId = Guid.NewGuid();
+        var factionId = Guid.NewGuid();
+        Guid worldId;
+        Guid urgentNpcId;
+
+        await using (var writeContext = new RpgWorldDbContext(options))
+        {
+            await writeContext.Database.MigrateAsync();
+            var world = World.Create("Persistent NPCs", 16, 16);
+            var urgentNpc = NpcActor.Create("Hungry smith", world, world.PositionAt(2, 3), start);
+            var satisfiedNpc = NpcActor.Create("Rested farmer", world, world.PositionAt(4, 5), start);
+            var player = PlayerActor.Create("Player", world, world.PositionAt(2, 3), start);
+            urgentNpc.AdvanceNeedsTo(start.AddHours(18));
+            urgentNpc.Earn(75m, start.AddHours(18));
+            urgentNpc.Spend(15m, start.AddHours(18));
+            urgentNpc.AssignJob("blacksmith", start.AddHours(18));
+            urgentNpc.SetHome(world, world.PositionAt(6, 7), start.AddHours(18));
+            urgentNpc.AddFamilyMember(familyMemberId, start.AddHours(18));
+            urgentNpc.JoinFaction(factionId, start.AddHours(18));
+            urgentNpc.SetGoal("feed-family", 90, familyMemberId, start.AddHours(18));
+            writeContext.AddRange(world, urgentNpc, satisfiedNpc, player);
+            await writeContext.SaveChangesAsync();
+            worldId = world.Id;
+            urgentNpcId = urgentNpc.Id;
+        }
+
+        await using var readContext = new RpgWorldDbContext(options);
+        var repository = new EfNpcNeedsRepository(readContext);
+        var stored = await readContext.Actors.OfType<NpcActor>()
+            .SingleAsync(npc => npc.Id == urgentNpcId);
+        var urgent = await repository.ListUrgentAsync(worldId, minimumHunger: 50m, maximumEnergy: 50m);
+
+        Assert.Equal(72m, stored.Hunger);
+        Assert.Equal(46m, stored.Energy);
+        Assert.Equal(60m, stored.Money);
+        Assert.Equal("blacksmith", stored.Job);
+        Assert.Equal(new Position(worldId, 6, 7), stored.Home);
+        Assert.Equal(familyMemberId, Assert.Single(stored.FamilyIds));
+        Assert.Equal(factionId, stored.FactionId);
+        Assert.Equal("feed-family", Assert.Single(stored.Goals).Code);
+        Assert.Equal(urgentNpcId, Assert.Single(urgent).ActorId);
+    }
+
+    [Fact]
     public async Task Actor_and_tile_occupancy_move_together_across_chunks()
     {
         var options = new DbContextOptionsBuilder<RpgWorldDbContext>()

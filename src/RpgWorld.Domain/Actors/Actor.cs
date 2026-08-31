@@ -138,10 +138,10 @@ public abstract class Actor : AggregateRoot
         Touch(occurredAtUtc);
     }
 
-    private void EnsureAlive()
+    protected void EnsureAlive()
     {
         if (Status == ActorStatus.Dead) throw new InvalidOperationException("Dead actors cannot perform actions.");
     }
 
-    private void Touch(DateTimeOffset occurredAtUtc) => UpdatedAtUtc = occurredAtUtc.ToUniversalTime();
+    protected void Touch(DateTimeOffset occurredAtUtc) => UpdatedAtUtc = occurredAtUtc.ToUniversalTime();
 }

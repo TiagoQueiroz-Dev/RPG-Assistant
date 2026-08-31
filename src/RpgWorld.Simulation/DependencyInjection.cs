@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IRegionSimulationService, RegionSimulationService>();
         services.AddSingleton<IActorMovementPolicy, AdjacentTileMovementPolicy>();
         services.AddScoped<IActorMovementService, ActorMovementService>();
+        services.AddScoped<ISimulationSystem, NpcNeedsSimulationSystem>();
         services.AddHostedService<SimulationEngine>();
         return services;
     }
