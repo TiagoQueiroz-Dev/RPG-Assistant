@@ -25,6 +25,8 @@ using RpgWorld.Simulation.Worlds.Factions;
 using RpgWorld.Application.Worlds.Events;
 using RpgWorld.Application.Worlds.Admin;
 using RpgWorld.Application.Worlds.Visibility;
+using RpgWorld.Application.Worlds.Content;
+using RpgWorld.Domain.Worlds.Content;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -160,6 +162,73 @@ app.MapGet(
             catch (KeyNotFoundException) { return Results.NotFound(); }
         })
     .WithName("GetPlayerCurrentRegion");
+
+app.MapGet(
+    "/api/worlds/{worldId:guid}/custom-content",
+    async (HttpContext httpContext, Guid worldId, ICustomContentService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try { return Results.Ok(await service.ListAsync(worldId, cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+    });
+
+app.MapGet(
+    "/api/worlds/{worldId:guid}/custom-content/export",
+    async (HttpContext httpContext, Guid worldId, ICustomContentService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try { return Results.Ok(await service.ExportAsync(worldId, cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+    });
+
+app.MapPost(
+    "/api/worlds/{worldId:guid}/custom-content",
+    async (HttpContext httpContext, Guid worldId, CustomContentApiRequest body,
+        ICustomContentService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        if (!Enum.TryParse<CustomContentKind>(body.Kind, true, out var kind))
+            return Results.BadRequest(new { error = "Unknown custom content kind." });
+        try
+        {
+            var created = await service.CreateAsync(worldId,
+                new CustomContentRequest(kind, body.Code, body.Name, body.Payload.GetRawText()), cancellationToken);
+            return Results.Created($"/api/worlds/{worldId}/custom-content/{created.Id}", created);
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapPut(
+    "/api/worlds/{worldId:guid}/custom-content/{definitionId:guid}",
+    async (HttpContext httpContext, Guid worldId, Guid definitionId, UpdateCustomContentApiRequest body,
+        ICustomContentService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            return Results.Ok(await service.UpdateAsync(worldId, definitionId,
+                new UpdateCustomContentRequest(body.Name, body.Payload.GetRawText()), cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        { return Results.BadRequest(new { error = exception.Message }); }
+    });
+
+app.MapDelete(
+    "/api/worlds/{worldId:guid}/custom-content/{definitionId:guid}",
+    async (HttpContext httpContext, Guid worldId, Guid definitionId,
+        ICustomContentService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            await service.DeleteAsync(worldId, definitionId, cancellationToken);
+            return Results.NoContent();
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+    });
 
 app.MapPost(
     "/api/actors/{actorId:guid}/move",
@@ -842,6 +911,9 @@ record WorldTimeSpeedRequest(decimal RealTimeMultiplier);
 record WorldTimeAdvanceRequest(double DurationSeconds);
 
 record ActorMoveApiRequest(int DestinationX, int DestinationY);
+
+record CustomContentApiRequest(string Kind, string Code, string Name, JsonElement Payload);
+record UpdateCustomContentApiRequest(string Name, JsonElement Payload);
 
 record CityTerritoryApiPosition(int X, int Y);
 

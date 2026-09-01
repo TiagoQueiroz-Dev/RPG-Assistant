@@ -11,6 +11,7 @@ import { WorldEventService, WorldEventTimelineItem } from './world-event.service
 import { WorldAdminService, WorldInspectorEntity, WorldInspectorView } from './world-admin.service';
 import { WorldRealtimeService } from '../../core/realtime/world-realtime.service';
 import { GameMasterCommand, GameMasterCommandService, GameMasterCommandType } from './game-master-command.service';
+import { CustomContentDefinition, CustomContentKind, CustomContentService } from './custom-content.service';
 
 @Component({
   selector: 'app-game-master-shell',
@@ -28,6 +29,7 @@ export class GameMasterShell implements OnDestroy {
   private readonly worldAdmin = inject(WorldAdminService);
   private readonly realtime = inject(WorldRealtimeService);
   private readonly commands = inject(GameMasterCommandService);
+  private readonly customContentService = inject(CustomContentService);
   private stopRealtimeUpdates?: () => void;
   private realtimeRefresh?: ReturnType<typeof setTimeout>;
 
@@ -47,6 +49,10 @@ export class GameMasterShell implements OnDestroy {
   protected readonly inspectorFilters = signal<{ regionX?: number; regionY?: number; factionId?: string }>({});
   protected readonly commandState = signal<'idle' | 'running' | 'completed' | 'error'>('idle');
   protected readonly commandMessage = signal('Escolha uma ferramenta e informe os campos aplicáveis.');
+  protected readonly customContent = signal<readonly CustomContentDefinition[]>([]);
+  protected readonly editingContent = signal<CustomContentDefinition | null>(null);
+  protected readonly customContentState = signal<'idle' | 'saving' | 'error'>('idle');
+  protected readonly customContentMessage = signal('Crie ou sobrescreva conteúdo apenas para esta campanha.');
 
   protected readonly world = signal<WorldAdminView>({
     worldId: 'demo',
@@ -88,6 +94,7 @@ export class GameMasterShell implements OnDestroy {
         this.loadFactions(result.worldId);
         this.loadTimeline(result.worldId);
         this.loadInspector(result.worldId);
+        this.loadCustomContent(result.worldId);
         this.connectInspectorRealtime(result.worldId);
         this.importState.set('completed');
         this.importMessage.set(
@@ -243,6 +250,75 @@ export class GameMasterShell implements OnDestroy {
     });
   }
 
+  protected saveCustomContent(event: SubmitEvent): void {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const data = new FormData(form);
+    const worldId = this.world().worldId;
+    if (!this.isGuid(worldId)) {
+      this.customContentState.set('error');
+      this.customContentMessage.set('Importe ou abra um mundo persistido antes de editar conteúdo.');
+      return;
+    }
+    try {
+      const payload = JSON.parse(this.formValue(data, 'payload') ?? '{}') as unknown;
+      if (payload === null || Array.isArray(payload) || typeof payload !== 'object')
+        throw new Error('O payload deve ser um objeto JSON.');
+      const editing = this.editingContent();
+      const name = this.formValue(data, 'name') ?? '';
+      const request = editing
+        ? this.customContentService.update(worldId, editing.id, { name, payload: payload as Readonly<Record<string, unknown>> })
+        : this.customContentService.create(worldId, {
+            kind: (this.formValue(data, 'kind') ?? 'Creature') as CustomContentKind,
+            code: this.formValue(data, 'code') ?? '', name,
+            payload: payload as Readonly<Record<string, unknown>>,
+          });
+      this.customContentState.set('saving');
+      request.subscribe({
+        next: saved => {
+          this.customContentState.set('idle');
+          this.customContentMessage.set(`${saved.name} salvo na versão ${saved.version}.`);
+          this.editingContent.set(null);
+          form.reset();
+          this.loadCustomContent(worldId);
+        },
+        error: error => {
+          this.customContentState.set('error');
+          this.customContentMessage.set(error?.error?.error ?? 'A definição foi rejeitada pelo servidor.');
+        },
+      });
+    } catch (error) {
+      this.customContentState.set('error');
+      this.customContentMessage.set(error instanceof Error ? error.message : 'Payload JSON inválido.');
+    }
+  }
+
+  protected editCustomContent(definition: CustomContentDefinition): void {
+    this.editingContent.set(definition);
+    this.customContentMessage.set(`Editando ${definition.name}; código e tipo permanecem estáveis.`);
+  }
+
+  protected cancelCustomContentEdit(): void {
+    this.editingContent.set(null);
+    this.customContentState.set('idle');
+  }
+
+  protected deleteCustomContent(definition: CustomContentDefinition): void {
+    const worldId = this.world().worldId;
+    if (!this.isGuid(worldId)) return;
+    this.customContentService.delete(worldId, definition.id).subscribe({
+      next: () => {
+        if (this.editingContent()?.id === definition.id) this.editingContent.set(null);
+        this.customContentMessage.set(`${definition.name} removido.`);
+        this.loadCustomContent(worldId);
+      },
+      error: () => {
+        this.customContentState.set('error');
+        this.customContentMessage.set('Não foi possível remover a definição.');
+      },
+    });
+  }
+
   ngOnDestroy(): void {
     this.stopRealtimeUpdates?.();
     if (this.realtimeRefresh) clearTimeout(this.realtimeRefresh);
@@ -355,6 +431,17 @@ export class GameMasterShell implements OnDestroy {
     this.worldAdmin.inspect(worldId, this.inspectorEntityType(), 1, 50, this.inspectorFilters()).subscribe({
       next: view => this.inspector.set(view),
       error: () => this.inspector.set(null),
+    });
+  }
+
+  private loadCustomContent(worldId: string): void {
+    if (!this.isGuid(worldId)) return;
+    this.customContentService.list(worldId).subscribe({
+      next: definitions => this.customContent.set(definitions),
+      error: () => {
+        this.customContent.set([]);
+        this.customContentState.set('error');
+      },
     });
   }
 

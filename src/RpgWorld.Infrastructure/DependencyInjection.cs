@@ -27,6 +27,9 @@ using RpgWorld.Application.Worlds.Admin;
 using RpgWorld.Infrastructure.Worlds.Admin;
 using RpgWorld.Application.Worlds.Visibility;
 using RpgWorld.Infrastructure.Worlds.Visibility;
+using RpgWorld.Application.Worlds.Content;
+using RpgWorld.Infrastructure.Worlds.Content;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace RpgWorld.Infrastructure;
 
@@ -37,6 +40,7 @@ public static class DependencyInjection
         IConfiguration configuration,
         NpcMemoryOptions? npcMemoryOptions = null)
     {
+        services.TryAddSingleton(TimeProvider.System);
         services.AddDbContext<RpgWorldDbContext>((serviceProvider, options) =>
         {
             var runtimeConfiguration = serviceProvider
@@ -96,6 +100,9 @@ public static class DependencyInjection
         services.AddScoped<IPlayerVisibilityService, PlayerVisibilityService>();
         services.AddScoped<IPlayerWorldViewService, PlayerWorldViewService>();
         services.AddScoped<IPlayerCurrentRegionService, PlayerCurrentRegionService>();
+        services.AddScoped<CustomContentService>();
+        services.AddScoped<ICustomContentService>(provider => provider.GetRequiredService<CustomContentService>());
+        services.AddScoped<ICampaignContentCatalogProvider>(provider => provider.GetRequiredService<CustomContentService>());
         services.AddScoped<IDomainEventHandler<ActorCreatedEvent>, PlayerVisibilityCreatedEventHandler>();
         services.AddScoped<IDomainEventHandler<ActorMovedEvent>, PlayerVisibilityMovedEventHandler>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();

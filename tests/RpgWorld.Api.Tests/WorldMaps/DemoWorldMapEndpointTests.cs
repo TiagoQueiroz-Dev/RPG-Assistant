@@ -16,6 +16,8 @@ using RpgWorld.Application.Actors.Inspection;
 using RpgWorld.Application.Worlds.Admin;
 using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Modules.Abstractions;
+using RpgWorld.Application.Worlds.Content;
+using RpgWorld.Domain.Worlds.Content;
 
 namespace RpgWorld.Api.Tests.WorldMaps;
 
@@ -105,6 +107,9 @@ public sealed class DemoWorldMapEndpointTests
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/map"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/view"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/current-region"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/custom-content"),
+            JsonRequest(HttpMethod.Post, $"/api/worlds/{worldId}/custom-content",
+                new { kind = "Creature", code = "secret", name = "Secret", payload = new { maximumHealth = 10 } }),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/actors?x=0&y=0"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/cities"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/factions"),
@@ -218,6 +223,26 @@ public sealed class DemoWorldMapEndpointTests
     }
 
     [Fact]
+    public async Task Game_master_can_create_campaign_custom_content_through_typed_endpoint()
+    {
+        using var factory = new MapWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var worldId = Guid.NewGuid();
+        client.DefaultRequestHeaders.Add("X-Test-Game-Master-World", worldId.ToString());
+
+        using var response = await client.PostAsJsonAsync($"/api/worlds/{worldId}/custom-content", new
+        {
+            kind = "Creature", code = "owlbear", name = "Owlbear", payload = new { maximumHealth = 90 }
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var recorded = factory.Services.GetRequiredService<RecordingCustomContentService>();
+        Assert.Equal(worldId, recorded.WorldId);
+        Assert.Equal((CustomContentKind.Creature, "owlbear"), (recorded.Request?.Kind, recorded.Request?.Code));
+        Assert.Contains("maximumHealth", recorded.Request?.Payload);
+    }
+
+    [Fact]
     public async Task Player_cannot_change_actor_identifier_to_read_another_player_view()
     {
         using var factory = new MapWebApplicationFactory();
@@ -312,6 +337,10 @@ public sealed class DemoWorldMapEndpointTests
                 services.AddSingleton<RecordingGameMasterCommandService>();
                 services.AddSingleton<IGameMasterCommandService>(provider =>
                     provider.GetRequiredService<RecordingGameMasterCommandService>());
+                services.RemoveAll<ICustomContentService>();
+                services.AddSingleton<RecordingCustomContentService>();
+                services.AddSingleton<ICustomContentService>(provider =>
+                    provider.GetRequiredService<RecordingCustomContentService>());
             });
         }
     }
@@ -461,5 +490,30 @@ public sealed class DemoWorldMapEndpointTests
                 Guid.NewGuid(), worldId, command.Type.ToString(), Guid.NewGuid(),
                 DateTimeOffset.UnixEpoch, "recorded"));
         }
+    }
+
+    private sealed class RecordingCustomContentService(IRpgContentCatalog catalog) : ICustomContentService
+    {
+        public Guid? WorldId { get; private set; }
+        public CustomContentRequest? Request { get; private set; }
+        public Task<IReadOnlyList<CustomContentView>> ListAsync(Guid worldId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<CustomContentView>>([]);
+        public Task<CustomContentView> CreateAsync(
+            Guid worldId, CustomContentRequest request, CancellationToken cancellationToken = default)
+        {
+            WorldId = worldId;
+            Request = request;
+            return Task.FromResult(new CustomContentView(Guid.NewGuid(), worldId, request.Kind, request.Code,
+                request.Name, request.Payload, 1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch));
+        }
+        public Task<CustomContentView> UpdateAsync(Guid worldId, Guid definitionId,
+            UpdateCustomContentRequest request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+        public Task DeleteAsync(Guid worldId, Guid definitionId, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+        public Task<CustomContentExport> ExportAsync(Guid worldId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new CustomContentExport(1, worldId, DateTimeOffset.UnixEpoch, []));
+        public Task<IRpgContentCatalog> ResolveCatalogAsync(Guid worldId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(catalog);
     }
 }

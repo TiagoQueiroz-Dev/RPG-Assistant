@@ -48,6 +48,11 @@ using RpgWorld.Infrastructure.Worlds.Admin;
 using RpgWorld.Application.Worlds.Visibility;
 using RpgWorld.Infrastructure.Worlds.Visibility;
 using RpgWorld.Api.WorldMaps;
+using RpgWorld.Application.Worlds.Content;
+using RpgWorld.Domain.Worlds.Content;
+using RpgWorld.Infrastructure.Worlds.Content;
+using RpgWorld.Modules.Abstractions;
+using RpgWorld.Modules.Default;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -1400,6 +1405,67 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal("story.omen", storyEvent.Type);
         Assert.Equal(8, publisher.Messages.Count);
         Assert.All(publisher.Messages, value => Assert.Equal("game-master-command", value.UpdateType));
+    }
+
+    [Fact]
+    public async Task Custom_content_is_campaign_scoped_persistent_validated_and_overrides_modules()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString()).Options;
+        var now = new DateTimeOffset(2037, 1, 2, 3, 0, 0, TimeSpan.Zero);
+        var modules = new RpgModuleCatalog([new DefaultRpgModule()]).Load(["rpgworld.default"]);
+        Guid worldId;
+        Guid creatureId;
+
+        await using (var context = new RpgWorldDbContext(options))
+        {
+            await context.Database.MigrateAsync();
+            var world = World.Create("Homebrew campaign", 8, 8);
+            var otherWorld = World.Create("Other campaign", 8, 8);
+            context.AddRange(world, otherWorld);
+            await context.SaveChangesAsync();
+            var service = new CustomContentService(context, modules, new FixedTimeProvider(now));
+            var creature = await service.CreateAsync(world.Id, new CustomContentRequest(
+                CustomContentKind.Creature, "wolf", "Dire Wolf", "{\"maximumHealth\":220,\"tags\":[\"homebrew\"]}"));
+            await service.CreateAsync(world.Id, new CustomContentRequest(
+                CustomContentKind.Item, "moon-key", "Moon Key", "{\"category\":\"key\",\"stackable\":false}"));
+            await service.CreateAsync(world.Id, new CustomContentRequest(
+                CustomContentKind.Biome, "ashen-forest", "Ashen Forest",
+                "{\"terrainCode\":\"woodland\",\"minimumTemperatureCelsius\":-10," +
+                "\"maximumTemperatureCelsius\":40,\"minimumHumidity\":0.2,\"maximumHumidity\":0.9}"));
+            await service.CreateAsync(world.Id, new CustomContentRequest(
+                CustomContentKind.Rule, "movement", "Homebrew Movement", "{\"parameters\":{\"diagonal-cost\":1.5}}"));
+            foreach (var kind in new[] { CustomContentKind.Npc, CustomContentKind.Class,
+                         CustomContentKind.Faction, CustomContentKind.Event })
+                await service.CreateAsync(world.Id, new CustomContentRequest(
+                    kind, $"custom-{kind.ToString().ToLowerInvariant()}", $"Custom {kind}", "{\"notes\":\"versionable\"}"));
+            await service.CreateAsync(otherWorld.Id, new CustomContentRequest(
+                CustomContentKind.Creature, "wolf", "Small Wolf", "{\"maximumHealth\":20}"));
+
+            Assert.Equal(8, (await service.ListAsync(world.Id)).Count);
+            Assert.Single(await service.ListAsync(otherWorld.Id));
+            var catalog = await service.ResolveCatalogAsync(world.Id);
+            Assert.Equal(("Dire Wolf", 220), (catalog.ResolveCreature("wolf").Name, catalog.ResolveCreature("wolf").MaximumHealth));
+            Assert.Equal("moon-key", catalog.ResolveItem("moon-key").Code);
+            Assert.Equal("ashen-forest", catalog.ResolveBiome("ashen-forest").Code);
+            Assert.Equal(1.5m, catalog.ResolveRule("movement").Parameters["diagonal-cost"]);
+            await Assert.ThrowsAsync<ArgumentException>(() => service.CreateAsync(world.Id, new CustomContentRequest(
+                CustomContentKind.Biome, "invalid", "Invalid", "{\"terrainCode\":\"missing\"}")));
+            var updated = await service.UpdateAsync(world.Id, creature.Id,
+                new UpdateCustomContentRequest("Dire Wolf Prime", "{\"maximumHealth\":300}"));
+            Assert.Equal(2, updated.Version);
+            Assert.Equal(8, (await service.ExportAsync(world.Id)).Definitions.Count);
+            worldId = world.Id;
+            creatureId = creature.Id;
+        }
+
+        await using var restarted = new RpgWorldDbContext(options);
+        var restored = new CustomContentService(restarted, modules, new FixedTimeProvider(now.AddMinutes(1)));
+        Assert.Equal("Dire Wolf Prime", (await restored.ListAsync(worldId)).Single(value => value.Id == creatureId).Name);
+        Assert.Equal(300, (await restored.ResolveCatalogAsync(worldId)).ResolveCreature("wolf").MaximumHealth);
+        var eventDefinition = (await restored.ListAsync(worldId)).Single(value => value.Kind == CustomContentKind.Event);
+        await restored.DeleteAsync(worldId, eventDefinition.Id);
+        Assert.DoesNotContain(await restored.ListAsync(worldId), value => value.Id == eventDefinition.Id);
     }
 
     [Fact]

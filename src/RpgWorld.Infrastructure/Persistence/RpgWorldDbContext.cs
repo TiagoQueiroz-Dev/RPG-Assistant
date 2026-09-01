@@ -11,6 +11,7 @@ using RpgWorld.Domain.Worlds.Resources;
 using RpgWorld.Domain.Worlds.Cities;
 using RpgWorld.Domain.Worlds.Factions;
 using RpgWorld.Domain.Worlds.Events;
+using RpgWorld.Domain.Worlds.Content;
 using RpgWorld.Infrastructure.Events;
 
 namespace RpgWorld.Infrastructure.Persistence;
@@ -55,6 +56,7 @@ public sealed class RpgWorldDbContext : DbContext
     public DbSet<FactionTerritoryTile> FactionTerritoryTiles => Set<FactionTerritoryTile>();
     public DbSet<WorldEvent> WorldEvents => Set<WorldEvent>();
     public DbSet<WorldConsequence> WorldConsequences => Set<WorldConsequence>();
+    public DbSet<CustomContentDefinition> CustomContentDefinitions => Set<CustomContentDefinition>();
 
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 

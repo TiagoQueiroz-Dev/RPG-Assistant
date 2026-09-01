@@ -107,6 +107,50 @@
     </div>
   </article>
 
+  <article class="panel custom-content-panel" aria-labelledby="custom-content-title">
+    <header>
+      <div>
+        <span class="eyebrow">Homebrew da campanha</span>
+        <h2 id="custom-content-title">Conteúdo customizado</h2>
+      </div>
+      <small [class.error]="customContentState() === 'error'" role="status">{{ customContentMessage() }}</small>
+    </header>
+    <div class="custom-content-layout">
+      <form (submit)="saveCustomContent($event)">
+        <select name="kind" aria-label="Tipo da definição" [disabled]="!!editingContent()">
+          @for (kind of ['Creature', 'Item', 'Npc', 'Biome', 'Rule', 'Class', 'Faction', 'Event']; track kind) {
+            <option [value]="kind" [selected]="editingContent()?.kind === kind">{{ kind }}</option>
+          }
+        </select>
+        <input name="code" required maxlength="80" placeholder="Código único"
+          [disabled]="!!editingContent()" [value]="editingContent()?.code || ''" />
+        <input name="name" required maxlength="200" placeholder="Nome"
+          [value]="editingContent()?.name || ''" />
+        <textarea name="payload" required aria-label="Payload JSON"
+          [value]="editingContent()?.payload || '{&quot;maximumHealth&quot;:100}'"></textarea>
+        <div>
+          <button type="submit" [disabled]="customContentState() === 'saving'">
+            {{ editingContent() ? 'Salvar nova versão' : 'Criar definição' }}
+          </button>
+          @if (editingContent()) {
+            <button type="button" (click)="cancelCustomContentEdit()">Cancelar</button>
+          }
+        </div>
+      </form>
+      <div class="custom-content-list">
+        @for (definition of customContent(); track definition.id) {
+          <article>
+            <div><strong>{{ definition.name }}</strong><small>{{ definition.kind }} · {{ definition.code }} · v{{ definition.version }}</small></div>
+            <button type="button" (click)="editCustomContent(definition)">Editar</button>
+            <button type="button" (click)="deleteCustomContent(definition)">Excluir</button>
+          </article>
+        } @empty {
+          <p>Nenhuma definição customizada nesta campanha.</p>
+        }
+      </div>
+    </div>
+  </article>
+
   <div class="classification-review">
     <div class="brush-tools" aria-label="Ferramentas de pintura do mapa">
       @for (brush of ['Forest', 'Water', 'Mountain', 'Desert', 'City']; track brush) {

@@ -8,6 +8,8 @@ using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Simulation.Actors;
 using RpgWorld.Simulation.Chunks;
 using RpgWorld.Simulation.Engine;
+using RpgWorld.Application.Worlds.Content;
+using RpgWorld.Modules.Abstractions;
 
 namespace RpgWorld.Simulation.Tests.Actors;
 
@@ -76,6 +78,27 @@ public sealed class ActorMovementServiceTests
         Assert.Contains(actor.Id, origin.OccupantIds);
     }
 
+    [Fact]
+    public async Task Movement_resolves_campaign_custom_biome_through_catalog_provider()
+    {
+        var world = World.Create("Custom movement", 8, 8);
+        var actor = PlayerActor.Create("Ayla", world, world.PositionAt(1, 1), DateTimeOffset.UnixEpoch);
+        var module = new RpgModuleCatalog([new TestRpgModule()]).Load(["test.core"]);
+        var customCatalog = new RpgContentOverlayCatalog(module, biomes:
+            [new BiomeDefinition("homebrew", "Homebrew", "road", -20m, 50m, 0m, 1m, 2m)]);
+        var origin = world.CreateTile(world.PositionAt(1, 1), "settled", customCatalog, 0, 20m, 0.5m);
+        var destination = world.CreateTile(world.PositionAt(2, 1), "homebrew", customCatalog, 0, 20m, 0.5m);
+        origin.AddOccupant(actor.Id);
+        var store = new FakeMovementStore(world, actor, [origin, destination]);
+        var provider = new RecordingContentProvider(customCatalog);
+
+        var result = await CreateService(store, campaignContent: provider)
+            .MoveAsync(new ActorMoveRequest(actor.Id, 2, 1));
+
+        Assert.Equal(2.5m, result.MovementCost);
+        Assert.Equal(world.Id, provider.WorldId);
+    }
+
     [Theory]
     [InlineData(4, 1)]
     [InlineData(-1, 1)]
@@ -101,7 +124,8 @@ public sealed class ActorMovementServiceTests
     private static ActorMovementService CreateService(
         FakeMovementStore store,
         RecordingChunkActivationService? activation = null,
-        RecordingPublisher? publisher = null) =>
+        RecordingPublisher? publisher = null,
+        ICampaignContentCatalogProvider? campaignContent = null) =>
         new(
             store,
             Definitions,
@@ -109,7 +133,8 @@ public sealed class ActorMovementServiceTests
             activation ?? new RecordingChunkActivationService(),
             new WorldCommandGate(),
             publisher ?? new RecordingPublisher(),
-            new FixedTimeProvider());
+            new FixedTimeProvider(),
+            campaignContent);
 
     private static Actor CreateActor(string kind, World world, Position position) => kind switch
     {
@@ -152,6 +177,25 @@ public sealed class ActorMovementServiceTests
             Task.FromResult<Chunk?>(worldId == _world.Id ? _chunks.GetValueOrDefault(coordinate) : null);
         public Task SaveChangesAsync(CancellationToken cancellationToken = default)
         { SaveCalls++; return Task.CompletedTask; }
+    }
+
+    private sealed class TestRpgModule : IRpgModule
+    {
+        public RpgModuleMetadata Metadata { get; } = new(
+            "test.core", "Test", new Version(1, 0), new Version(1, 0));
+        public IEnumerable<TerrainDefinition> Terrains => Definitions.Terrains;
+        public IEnumerable<BiomeDefinition> Biomes => Definitions.Biomes;
+    }
+
+    private sealed class RecordingContentProvider(IRpgContentCatalog content) : ICampaignContentCatalogProvider
+    {
+        public Guid? WorldId { get; private set; }
+        public Task<IRpgContentCatalog> ResolveCatalogAsync(
+            Guid worldId, CancellationToken cancellationToken = default)
+        {
+            WorldId = worldId;
+            return Task.FromResult(content);
+        }
     }
 
     private sealed class RecordingChunkActivationService : IChunkActivationService

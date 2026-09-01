@@ -5,6 +5,7 @@ using RpgWorld.Domain.Worlds;
 using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Simulation.Chunks;
 using RpgWorld.Simulation.Engine;
+using RpgWorld.Application.Worlds.Content;
 
 namespace RpgWorld.Simulation.Actors;
 
@@ -15,7 +16,8 @@ public sealed class ActorMovementService(
     IChunkActivationService chunkActivationService,
     IWorldCommandGate commandGate,
     IWorldUpdatePublisher publisher,
-    TimeProvider timeProvider) : IActorMovementService
+    TimeProvider timeProvider,
+    ICampaignContentCatalogProvider? campaignContent = null) : IActorMovementService
 {
     public async Task<ActorMoveResult> MoveAsync(
         ActorMoveRequest request,
@@ -43,7 +45,10 @@ public sealed class ActorMovementService(
             ?? throw new InvalidOperationException("Actor origin tile was not found.");
         var destinationTile = await store.GetTileAsync(destination, cancellationToken)
             ?? throw new InvalidOperationException("Actor destination tile was not found.");
-        var evaluation = movementPolicy.Evaluate(actor, originTile, destinationTile, definitions);
+        var effectiveDefinitions = campaignContent is null
+            ? definitions
+            : await campaignContent.ResolveCatalogAsync(worldId, cancellationToken);
+        var evaluation = movementPolicy.Evaluate(actor, originTile, destinationTile, effectiveDefinitions);
         var originCoordinate = world.ChunkAt(origin);
         var destinationCoordinate = world.ChunkAt(destination);
         var originChunk = await store.GetChunkAsync(worldId, originCoordinate, cancellationToken)

@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RpgWorld.Domain\RpgWorld.Domain.csproj" />
+    <ProjectReference Include="..\RpgWorld.Modules.Abstractions\RpgWorld.Modules.Abstractions.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
