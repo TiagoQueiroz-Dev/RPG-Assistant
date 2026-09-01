@@ -91,6 +91,7 @@ public sealed class DemoWorldMapEndpointTests
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/map"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/map"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/view"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/current-region"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/actors?x=0&y=0"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/cities"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/factions"),
@@ -204,7 +205,7 @@ public sealed class DemoWorldMapEndpointTests
     }
 
     [Fact]
-    public async Task Player_cannot_change_actor_identifier_to_read_another_world_view()
+    public async Task Player_cannot_change_actor_identifier_to_read_another_player_view()
     {
         using var factory = new MapWebApplicationFactory();
         using var client = factory.CreateClient();
@@ -213,10 +214,12 @@ public sealed class DemoWorldMapEndpointTests
         client.DefaultRequestHeaders.Add("X-Test-Player-World", worldId.ToString());
         client.DefaultRequestHeaders.Add("X-Test-Player-Actor", playerActorId.ToString());
 
-        using var response = await client.GetAsync(
-            $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/view");
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        foreach (var endpoint in new[] { "view", "current-region" })
+        {
+            using var response = await client.GetAsync(
+                $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/{endpoint}");
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
     }
 
     [Fact]

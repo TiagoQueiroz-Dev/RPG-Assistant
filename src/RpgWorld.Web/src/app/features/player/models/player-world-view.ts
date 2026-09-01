@@ -19,6 +19,7 @@ export interface VisibleEntityView {
   readonly entityId: string;
   readonly displayName: string;
   readonly kind: 'person' | 'creature' | 'landmark';
+  readonly category?: 'npc' | 'player' | 'creature' | 'merchant' | 'guard';
   readonly distance: string;
 }
 

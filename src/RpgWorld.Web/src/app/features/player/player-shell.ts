@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, OnDestroy, signal } from '@
 import { WorldMap } from '../map/world-map';
 import { PlayerWorldView } from './models/player-world-view';
 import { WorldRealtimeService } from '../../core/realtime/world-realtime.service';
-import { PlayerWorldService } from './player-world.service';
+import { PlayerWorldService, ServerPlayerCurrentRegion } from './player-world.service';
 import { WorldMapOverlay } from '../map/models/world-map-view';
 
 @Component({
@@ -18,6 +18,7 @@ export class PlayerShell implements OnDestroy {
   private stopRealtimeUpdates?: () => void;
   protected readonly visibilityRevision = signal(0);
   protected readonly visibleOverlays = signal<readonly WorldMapOverlay[]>([]);
+  protected readonly currentRegion = signal<ServerPlayerCurrentRegion | null>(null);
   protected readonly view = signal<PlayerWorldView>({
     playerActorId: '00000000-0000-4000-8000-000000000001',
     worldId: 'demo',
@@ -70,20 +71,22 @@ export class PlayerShell implements OnDestroy {
   private loadVisibleWorld(): void {
     const current = this.view();
     if (!/^[0-9a-f-]{36}$/i.test(current.worldId)) return;
-    this.playerWorld.load(current.worldId, current.playerActorId).subscribe(server => {
+    this.playerWorld.loadCurrentRegion(current.worldId, current.playerActorId).subscribe(server => {
+      this.currentRegion.set(server);
       this.view.update(view => ({
         ...view,
         worldName: server.worldName,
         characterName: server.characterName,
         currentLocation: {
           ...view.currentLocation,
-          name: `X ${server.x} · Y ${server.y}`,
-          description: `Área visível em um raio de ${server.perceptionRadius} tiles.`,
+          name: server.regionName,
+          description: `${server.regionKind === 'city' ? 'Cidade' : 'Região'} em X ${server.x} · Y ${server.y}; visão de ${server.perceptionRadius} tiles.`,
         },
         nearbyEntities: server.visibleEntities.map(entity => ({
           entityId: entity.id,
           displayName: entity.name,
           kind: entity.kind === 'creature' ? 'creature' : 'person',
+          category: entity.category,
           distance: `${entity.distance} tile(s)`,
         })),
       }));
@@ -91,7 +94,7 @@ export class PlayerShell implements OnDestroy {
         ...server.visibleEntities.map(entity => ({
           id: entity.id, x: entity.x, y: entity.y, kind: 'entity' as const, label: entity.name,
         })),
-        ...server.visibleStructures.map(structure => ({
+        ...server.visibleEstablishments.map(structure => ({
           id: structure.id, x: structure.x, y: structure.y, kind: 'structure' as const, label: structure.kind,
         })),
       ]);

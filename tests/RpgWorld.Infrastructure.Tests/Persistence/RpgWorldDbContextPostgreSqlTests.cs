@@ -1426,6 +1426,9 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
             var visibleTile = tiles.Single(value => value.X == 5 && value.Y == 5);
             var secretTile = tiles.Single(value => value.X == 0 && value.Y == 7);
             var visibleNpc = NpcActor.Create("Visible NPC", world, world.PositionAt(6, 5), now);
+            visibleNpc.AssignJob("merchant", now);
+            var visibleGuard = NpcActor.Create("Visible Guard", world, world.PositionAt(5, 4), now);
+            visibleGuard.AssignJob("city guard", now);
             var visibleCreature = CreatureActor.Create("Visible Creature", world, world.PositionAt(5, 6), now);
             var visiblePlayer = PlayerActor.Create("Visible Player", world, world.PositionAt(3, 5), now);
             var hiddenNpc = NpcActor.Create("Hidden NPC", world, secretTile.Position, now);
@@ -1439,13 +1442,15 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
                 world, secretTile, DefaultWorldDefinitions.Catalog.ResolveResource("stone"), now, initialQuantity: 40m);
             visibleResource.Discover(player.Id, now);
             secretResource.Discover(player.Id, now);
-            var visibleCity = City.Create(world, "Seen City", visibleTile.Position, [visibleTile.Position], 10, 5m, now);
+            var visibleCity = City.Create(world, "Seen City", visibleTile.Position,
+                [visibleTile.Position, world.PositionAt(6, 5), world.PositionAt(5, 6), world.PositionAt(5, 4),
+                    world.PositionAt(3, 5), world.PositionAt(4, 5), world.PositionAt(6, 6)], 10, 5m, now);
             var secretCity = City.Create(world, "Secret City", secretTile.Position, [secretTile.Position], 10, 5m, now);
             var visibleEvent = WorldEvent.Create(Guid.NewGuid(), world.Id, "story.visible", now,
                 new WorldEventPosition(5, 5), [visibleNpc.Id], "{\"secret\":\"safe\"}");
             var hiddenEvent = WorldEvent.Create(Guid.NewGuid(), world.Id, "story.hidden", now,
                 new WorldEventPosition(0, 7), [hiddenNpc.Id], "{\"secret\":\"hidden\"}");
-            context.AddRange(world, chunk, player, visibleNpc, visibleCreature, visiblePlayer, hiddenNpc,
+            context.AddRange(world, chunk, player, visibleNpc, visibleGuard, visibleCreature, visiblePlayer, hiddenNpc,
                 visibleResource, secretResource, visibleCity, secretCity, visibleEvent, hiddenEvent);
             context.Tiles.AddRange(tiles);
             await context.SaveChangesAsync();
@@ -1471,7 +1476,7 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
             Assert.DoesNotContain("Secret City", System.Text.Json.JsonSerializer.Serialize(map));
             Assert.Equal(46, exposed.Length);
             var playerView = await new PlayerWorldViewService(context, visibility).GetAsync(player.Id);
-            Assert.Equal(3, playerView.VisibleEntities.Count);
+            Assert.Equal(4, playerView.VisibleEntities.Count);
             Assert.Contains(playerView.VisibleEntities, value => value.Kind == "npc" && value.Name == "Visible NPC");
             Assert.Contains(playerView.VisibleEntities, value => value.Kind == "creature" && value.Name == "Visible Creature");
             Assert.Contains(playerView.VisibleEntities, value => value.Kind == "player" && value.Name == "Visible Player");
@@ -1484,10 +1489,30 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
             Assert.DoesNotContain("Hidden NPC", serializedPlayerView);
             Assert.DoesNotContain("health", serializedPlayerView, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("payload", serializedPlayerView, StringComparison.OrdinalIgnoreCase);
+            var currentRegionService = new PlayerCurrentRegionService(context,
+                new PlayerWorldViewService(context, visibility));
+            var currentRegion = await currentRegionService.GetAsync(player.Id);
+            Assert.Equal((visibleCity.Id, "city", "Seen City"),
+                (currentRegion.RegionId, currentRegion.RegionKind, currentRegion.RegionName));
+            Assert.Equal("merchant", currentRegion.VisibleEntities.Single(value => value.Id == visibleNpc.Id).Category);
+            Assert.Equal("guard", currentRegion.VisibleEntities.Single(value => value.Id == visibleGuard.Id).Category);
+            Assert.Equal(visibleGuard.Id, currentRegion.VisibleEntities[0].Id);
+            Assert.Contains(currentRegion.VisibleEntities, value => value.Kind == "player");
+            Assert.Contains(currentRegion.VisibleEntities, value => value.Kind == "creature");
+            Assert.Contains(currentRegion.VisibleEstablishments, value => value.Id == visibleStructureId);
+            Assert.Contains(currentRegion.RelevantEvents, value => value.Id == visibleEvent.Id);
+            Assert.DoesNotContain("Hidden NPC", System.Text.Json.JsonSerializer.Serialize(currentRegion));
             var recipients = await visibility.ListPlayersSeeingAsync(world.Id, 5, 5);
             Assert.Contains(player.Id, recipients);
             Assert.Contains(visiblePlayer.Id, recipients);
             Assert.DoesNotContain(hiddenNpc.Id, recipients);
+            trackedPlayer.Move(world, world.PositionAt(2, 2), now.AddMinutes(2));
+            var returnMovement = Assert.IsType<ActorMovedEvent>(Assert.Single(trackedPlayer.DomainEvents));
+            await context.SaveChangesAsync();
+            await new PlayerVisibilityMovedEventHandler(context, visibility).HandleAsync(returnMovement);
+            var changedRegion = await currentRegionService.GetAsync(player.Id);
+            Assert.Equal("chunk", changedRegion.RegionKind);
+            Assert.Equal(chunk.Id, changedRegion.RegionId);
             worldId = world.Id;
             playerId = player.Id;
         }
@@ -1496,7 +1521,7 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         var restoredVisibility = await new PlayerVisibilityService(restarted, new FixedTimeProvider(now.AddMinutes(2)))
             .GetAsync(playerId);
         Assert.Equal(worldId, restoredVisibility.WorldId);
-        Assert.Equal("Known", restoredVisibility.Tiles.Single(value => value.X == 2 && value.Y == 2).State);
+        Assert.Equal("Visible", restoredVisibility.Tiles.Single(value => value.X == 2 && value.Y == 2).State);
         Assert.DoesNotContain(restoredVisibility.Tiles, value => value.X == 0 && value.Y == 7);
     }
 

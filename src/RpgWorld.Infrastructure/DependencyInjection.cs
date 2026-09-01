@@ -95,6 +95,7 @@ public static class DependencyInjection
         services.AddScoped<IGameMasterCommandService, GameMasterCommandService>();
         services.AddScoped<IPlayerVisibilityService, PlayerVisibilityService>();
         services.AddScoped<IPlayerWorldViewService, PlayerWorldViewService>();
+        services.AddScoped<IPlayerCurrentRegionService, PlayerCurrentRegionService>();
         services.AddScoped<IDomainEventHandler<ActorCreatedEvent>, PlayerVisibilityCreatedEventHandler>();
         services.AddScoped<IDomainEventHandler<ActorMovedEvent>, PlayerVisibilityMovedEventHandler>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();

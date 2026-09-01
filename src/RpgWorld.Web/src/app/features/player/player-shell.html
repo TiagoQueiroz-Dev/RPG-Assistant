@@ -18,8 +18,8 @@
     <article class="panel nearby-panel">
       <header>
         <div>
-          <span class="eyebrow">Ao seu alcance</span>
-          <h2>Presenças próximas</h2>
+          <span class="eyebrow">{{ currentRegion()?.regionKind || 'região' }}</span>
+          <h2>{{ currentRegion()?.regionName || 'Presenças próximas' }}</h2>
         </div>
       </header>
       <div class="nearby-list">
@@ -30,7 +30,7 @@
             }}</span>
             <p>
               <strong>{{ entity.displayName }}</strong
-              ><small>{{ entity.kind }}</small>
+              ><small>{{ entity.category || entity.kind }}</small>
             </p>
             <span>{{ entity.distance }}</span>
           </div>
@@ -38,21 +38,27 @@
       </div>
     </article>
 
-    <article class="panel knowledge-panel">
+    <article class="panel knowledge-panel local-panel">
       <header>
         <div>
-          <span class="eyebrow">Seu conhecimento</span>
-          <h2>Regiões descobertas</h2>
+          <span class="eyebrow">Contexto local</span>
+          <h2>Estabelecimentos e eventos</h2>
         </div>
       </header>
       <ol>
-        @for (region of view().discoveredRegions; track region.regionId; let index = $index) {
+        @for (place of currentRegion()?.visibleEstablishments || []; track place.id; let index = $index) {
           <li>
             <span>0{{ index + 1 }}</span>
             <p>
-              <strong>{{ region.name }}</strong
-              ><small>{{ region.knowledge }}</small>
+              <strong>{{ place.kind }}</strong
+              ><small>X {{ place.x }} · Y {{ place.y }}</small>
             </p>
+          </li>
+        }
+        @for (event of currentRegion()?.relevantEvents || []; track event.id) {
+          <li>
+            <span>•</span>
+            <p><strong>{{ event.type }}</strong><small>acontecimento recente</small></p>
           </li>
         }
       </ol>

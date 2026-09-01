@@ -94,6 +94,55 @@ public sealed class WorldHubTests
     }
 
     [Fact]
+    public async Task Movement_invalidates_origin_view_without_revealing_hidden_destination()
+    {
+        using var factory = new RealtimeWebApplicationFactory();
+        var worldId = Guid.NewGuid();
+        var originPlayerId = Guid.NewGuid();
+        var destinationPlayerId = Guid.NewGuid();
+        factory.Services.GetRequiredService<RecordingVisibilityService>().RecipientSelector = (x, y) =>
+            (x, y) == (1, 1) ? [originPlayerId] : [destinationPlayerId];
+        var originReceived = new TaskCompletionSource<WorldUpdateMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var destinationReceived = new TaskCompletionSource<WorldUpdateMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var origin = Connection(factory, originReceived);
+        await using var destination = Connection(factory, destinationReceived);
+        await origin.StartAsync();
+        await destination.StartAsync();
+        await origin.InvokeAsync(nameof(WorldHub.JoinPlayer), originPlayerId);
+        await destination.InvokeAsync(nameof(WorldHub.JoinPlayer), destinationPlayerId);
+        using var scope = factory.Services.CreateScope();
+        var message = new WorldUpdateMessage(Guid.NewGuid(), worldId, "actor.moved", DateTimeOffset.UtcNow,
+            new Dictionary<string, string?>
+            {
+                ["actorId"] = Guid.NewGuid().ToString(), ["actorKind"] = "npc",
+                ["originX"] = "1", ["originY"] = "1", ["destinationX"] = "9", ["destinationY"] = "9"
+            });
+
+        await scope.ServiceProvider.GetRequiredService<IWorldUpdatePublisher>().PublishToGameMasterAsync(message);
+
+        var entered = await destinationReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var left = await originReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal("actor.moved", entered.UpdateType);
+        Assert.Equal("visibility.changed", left.UpdateType);
+        Assert.DoesNotContain("destinationX", left.Data.Keys);
+        Assert.DoesNotContain("destinationY", left.Data.Keys);
+    }
+
+    private static HubConnection Connection(
+        RealtimeWebApplicationFactory factory,
+        TaskCompletionSource<WorldUpdateMessage> received)
+    {
+        var connection = new HubConnectionBuilder()
+            .WithUrl("http://localhost/hubs/world", options =>
+            {
+                options.Transports = HttpTransportType.LongPolling;
+                options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+            }).Build();
+        connection.On<WorldUpdateMessage>(nameof(IWorldHubClient.WorldUpdated), message => received.TrySetResult(message));
+        return connection;
+    }
+
+    [Fact]
     public async Task Claim_authorizer_only_allows_claimed_audiences()
     {
         var worldId = Guid.NewGuid();
@@ -168,6 +217,7 @@ public sealed class WorldHubTests
     private sealed class RecordingVisibilityService : IPlayerVisibilityService
     {
         public IReadOnlyList<Guid> Recipients { get; set; } = [];
+        public Func<int, int, IReadOnlyList<Guid>>? RecipientSelector { get; set; }
         public (Guid WorldId, int X, int Y)? LastQuery { get; private set; }
         public Task<PlayerVisibilityView> GetAsync(Guid playerActorId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
@@ -177,7 +227,7 @@ public sealed class WorldHubTests
             Guid worldId, int x, int y, CancellationToken cancellationToken = default)
         {
             LastQuery = (worldId, x, y);
-            return Task.FromResult(Recipients);
+            return Task.FromResult(RecipientSelector?.Invoke(x, y) ?? Recipients);
         }
     }
 }

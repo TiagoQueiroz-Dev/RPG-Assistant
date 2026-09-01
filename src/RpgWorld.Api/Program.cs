@@ -139,6 +139,22 @@ app.MapGet(
         })
     .WithName("GetPlayerWorldView");
 
+app.MapGet(
+        "/api/worlds/{worldId:guid}/players/{playerActorId:guid}/current-region",
+        async (HttpContext httpContext, Guid worldId, Guid playerActorId,
+            IPlayerCurrentRegionService service, CancellationToken cancellationToken) =>
+        {
+            if (!PlayerWorldAuthorization.HasContext(httpContext.User, worldId, playerActorId))
+                return Results.StatusCode(403);
+            try
+            {
+                var region = await service.GetAsync(playerActorId, cancellationToken);
+                return region.WorldId == worldId ? Results.Ok(region) : Results.NotFound();
+            }
+            catch (KeyNotFoundException) { return Results.NotFound(); }
+        })
+    .WithName("GetPlayerCurrentRegion");
+
 app.MapPost(
     "/api/actors/{actorId:guid}/move",
     async (HttpContext httpContext, Guid actorId, ActorMoveApiRequest body,
