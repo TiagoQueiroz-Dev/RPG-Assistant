@@ -6,7 +6,6 @@ using RpgWorld.Application.Worlds.Editing;
 using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Infrastructure;
 using RpgWorld.Infrastructure.Worlds.Importing;
-using RpgWorld.Modules.Default.Worlds;
 using RpgWorld.Simulation;
 using Microsoft.AspNetCore.Http.Features;
 using RpgWorld.Simulation.Time;
@@ -15,7 +14,8 @@ using System.Globalization;
 using RpgWorld.Api.Authorization;
 using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Domain.Actors.Traits;
-using RpgWorld.Modules.Default.Actors;
+using RpgWorld.Modules.Abstractions;
+using RpgWorld.Modules.Default;
 using RpgWorld.Application.Actors.Inspection;
 using RpgWorld.Application.Worlds.Cities;
 using RpgWorld.Simulation.Worlds.Economy;
@@ -29,8 +29,14 @@ using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSingleton<IWorldDefinitionCatalog>(DefaultWorldDefinitions.Catalog);
-builder.Services.AddSingleton<ITraitDefinitionCatalog>(DefaultActorDefinitions.Catalog);
+var rpgModules = RpgModuleCatalog.Discover(
+    RpgModuleCatalog.CurrentEngineVersion,
+    typeof(DefaultRpgModule).Assembly);
+var rpgContent = rpgModules.Load(["rpgworld.default"]);
+builder.Services.AddSingleton<IRpgModuleCatalog>(rpgModules);
+builder.Services.AddSingleton<IRpgContentCatalog>(rpgContent);
+builder.Services.AddSingleton<IWorldDefinitionCatalog>(rpgContent);
+builder.Services.AddSingleton<ITraitDefinitionCatalog>(rpgContent);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSimulation(
     simulationEngineOptions: new SimulationEngineOptions

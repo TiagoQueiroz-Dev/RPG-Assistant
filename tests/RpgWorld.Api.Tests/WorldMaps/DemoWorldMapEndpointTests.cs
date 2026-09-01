@@ -14,11 +14,24 @@ using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Application.Actors.Inspection;
 using RpgWorld.Application.Worlds.Admin;
+using RpgWorld.Domain.Worlds.Definitions;
+using RpgWorld.Modules.Abstractions;
 
 namespace RpgWorld.Api.Tests.WorldMaps;
 
 public sealed class DemoWorldMapEndpointTests
 {
+    [Fact]
+    public void Runtime_uses_unified_module_catalog_through_engine_abstractions()
+    {
+        using var factory = new MapWebApplicationFactory();
+        var content = factory.Services.GetRequiredService<IRpgContentCatalog>();
+
+        Assert.Same(content, factory.Services.GetRequiredService<IWorldDefinitionCatalog>());
+        Assert.Contains(content.Modules, value => value.Id == "rpgworld.default");
+        Assert.Equal("wolf", content.ResolveCreature("wolf").Code);
+    }
+
     [Fact]
     public async Task Returns_world_with_multiple_complete_chunks_and_distinct_biomes()
     {

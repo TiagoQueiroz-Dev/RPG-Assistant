@@ -4,9 +4,9 @@ namespace RpgWorld.Modules.Abstractions.Worlds;
 
 public interface IWorldDefinitionModule
 {
-    IEnumerable<TerrainDefinition> Terrains { get; }
+    IEnumerable<TerrainDefinition> Terrains => [];
 
-    IEnumerable<BiomeDefinition> Biomes { get; }
+    IEnumerable<BiomeDefinition> Biomes => [];
 
     IEnumerable<ResourceDefinition> Resources => [];
 }
