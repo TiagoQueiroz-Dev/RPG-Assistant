@@ -19,6 +19,8 @@ internal static class WorldEventPolicy
             CityCrisisEvent value => new Metadata(value.WorldId, null, []),
             CityDestroyedEvent value => new Metadata(value.WorldId, null, []),
             CityGrowthEvent value => new Metadata(value.WorldId, null, []),
+            CityTradeRoutesChangedEvent value => new Metadata(value.WorldId, null, []),
+            CitySatisfactionChangedEvent value => new Metadata(value.WorldId, null, []),
             CityResourceShortageEvent value => new Metadata(value.WorldId, null, []),
             CityResourceSurplusEvent value => new Metadata(value.WorldId, null, []),
             FactionCreatedEvent value => new Metadata(value.WorldId, null, [value.LeaderActorId]),

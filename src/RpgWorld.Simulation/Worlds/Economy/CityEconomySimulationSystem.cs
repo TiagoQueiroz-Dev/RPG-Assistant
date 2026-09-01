@@ -21,10 +21,12 @@ public sealed class CityEconomySimulationSystem(
             .OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
         foreach (var city in cities)
         {
+            var merchants = await repository.ListActiveMerchantsAsync(city, cancellationToken);
+            context.RecordActorsProcessed(merchants.Count);
             var deposits = await repository.ListAvailableDepositsAsync(city, naturalCodes, cancellationToken);
-            var production = Produce(city, deposits, context.Clock.CurrentInstant);
+            var production = Produce(city, deposits, merchants.Count, context.Clock.CurrentInstant);
             city.RunEconomicCycle(options.Resources.Select(resource => resource.ToRule()).ToArray(), production,
-                context.Clock.CurrentInstant);
+                context.Clock.CurrentInstant, merchants.Count);
         }
         await repository.SaveChangesAsync(cancellationToken);
     }
@@ -32,6 +34,7 @@ public sealed class CityEconomySimulationSystem(
     private IReadOnlyDictionary<string, decimal> Produce(
         City city,
         IReadOnlyList<ResourceDeposit> deposits,
+        int activeMerchantCount,
         DateTimeOffset occurredAtUtc)
     {
         var production = new Dictionary<string, decimal>(StringComparer.Ordinal);
@@ -39,7 +42,8 @@ public sealed class CityEconomySimulationSystem(
         {
             var produced = checked(
                 (city.Population * resource.BaselineProductionPerResident) +
-                (city.BuildingIds.Count * resource.ProductionPerBuilding));
+                (city.BuildingIds.Count * resource.ProductionPerBuilding) +
+                (activeMerchantCount * resource.TradeImportPerMerchant));
             var requestedExtraction = checked(city.Population * resource.NaturalExtractionPerResident);
             if (requestedExtraction > 0m && resource.NormalizedNaturalResourceCode is { } naturalCode)
             {

@@ -37,6 +37,8 @@ public sealed class City : AggregateRoot
         Wealth = initialWealth;
         GoverningFactionId = governingFactionId;
         Status = CityStatus.Active;
+        Satisfaction = 75m;
+        ActiveTradeRouteCount = 0;
         FoundedAtUtc = foundedAtUtc.ToUniversalTime();
         UpdatedAtUtc = FoundedAtUtc;
         _territoryTiles = territory.Select(position => CityTerritoryTile.Create(Id, position)).ToList();
@@ -52,6 +54,8 @@ public sealed class City : AggregateRoot
     public Position Center => new(WorldId, CenterX, CenterY);
     public int Population { get; private set; }
     public decimal Wealth { get; private set; }
+    public decimal Satisfaction { get; private set; }
+    public int ActiveTradeRouteCount { get; private set; }
     public Guid? GoverningFactionId { get; private set; }
     public CityStatus Status { get; private set; }
     public DateTimeOffset FoundedAtUtc { get; private set; }
@@ -171,7 +175,8 @@ public sealed class City : AggregateRoot
     public CityEconomicCycleResult RunEconomicCycle(
         IEnumerable<CityResourceEconomyRule> rules,
         IReadOnlyDictionary<string, decimal> production,
-        DateTimeOffset occurredAtUtc)
+        DateTimeOffset occurredAtUtc,
+        int activeTradeRouteCount = 0)
     {
         EnsureActive();
         ArgumentNullException.ThrowIfNull(rules);
@@ -185,6 +190,9 @@ public sealed class City : AggregateRoot
             throw new ArgumentException("Economy resource rules must be unique.", nameof(rules));
         if (production.Any(entry => entry.Value < 0m))
             throw new ArgumentOutOfRangeException(nameof(production), "Production cannot be negative.");
+        if (activeTradeRouteCount < 0) throw new ArgumentOutOfRangeException(nameof(activeTradeRouteCount));
+
+        UpdateTradeRoutes(activeTradeRouteCount, instant);
 
         var markets = new List<CityResourceMarketSnapshot>(configuredRules.Length);
         foreach (var rule in configuredRules.OrderBy(rule => rule.ResourceCode, StringComparer.Ordinal))
@@ -221,10 +229,50 @@ public sealed class City : AggregateRoot
             RecordMarketTransition(previousCondition, market);
         }
 
+        UpdateSatisfaction(markets, instant);
+
         EconomicCycleCount = checked(EconomicCycleCount + 1);
         LastEconomicCycleAtUtc = instant;
         Touch(instant);
         return new CityEconomicCycleResult(Id, EconomicCycleCount, instant, markets.ToArray());
+    }
+
+    private void UpdateTradeRoutes(int routeCount, DateTimeOffset occurredAtUtc)
+    {
+        if (routeCount == ActiveTradeRouteCount) return;
+        var previous = ActiveTradeRouteCount;
+        ActiveTradeRouteCount = routeCount;
+        AddHistory(CityHistoryEventTypes.TradeRoutesChanged,
+            $"Active trade routes changed from {previous} to {routeCount}.", occurredAtUtc,
+            new Dictionary<string, string>
+            {
+                ["previousRouteCount"] = previous.ToString(),
+                ["currentRouteCount"] = routeCount.ToString()
+            });
+        RaiseDomainEvent(new CityTradeRoutesChangedEvent(Id, WorldId, previous, routeCount, occurredAtUtc));
+    }
+
+    private void UpdateSatisfaction(IReadOnlyCollection<CityResourceMarketSnapshot> markets, DateTimeOffset occurredAtUtc)
+    {
+        var shortages = markets.Where(market => market.Condition == CityMarketCondition.Shortage).ToArray();
+        var delta = shortages.Length == 0
+            ? 1m
+            : -Math.Min(25m, shortages.Sum(market => 5m +
+                (market.Demand <= 0m ? 0m : 10m * market.UnmetDemand / market.Demand)));
+        var previous = Satisfaction;
+        Satisfaction = Math.Clamp(Satisfaction + delta, 0m, 100m);
+        if (Satisfaction == previous) return;
+        var reason = shortages.Length == 0
+            ? "Stable markets improved city satisfaction."
+            : "Resource shortages reduced city satisfaction.";
+        AddHistory(CityHistoryEventTypes.SatisfactionChanged, reason, occurredAtUtc,
+            new Dictionary<string, string>
+            {
+                ["previousSatisfaction"] = previous.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["currentSatisfaction"] = Satisfaction.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            });
+        RaiseDomainEvent(new CitySatisfactionChangedEvent(
+            Id, WorldId, previous, Satisfaction, reason, occurredAtUtc));
     }
 
     public void AddBuilding(Guid buildingId, DateTimeOffset occurredAtUtc)

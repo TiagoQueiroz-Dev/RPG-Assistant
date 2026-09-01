@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RpgWorld.Application.Worlds.Cities;
 using RpgWorld.Domain.Worlds.Cities;
 using RpgWorld.Domain.Worlds.Resources;
+using RpgWorld.Domain.Actors;
 
 namespace RpgWorld.Infrastructure.Persistence.Repositories;
 
@@ -54,6 +55,25 @@ public sealed class EfCityEconomyRepository(RpgWorldDbContext dbContext) : ICity
             _ => false
         }).ToArray();
     }
+
+    public async Task<IReadOnlyList<NpcActor>> ListActiveMerchantsAsync(
+        City city,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(city);
+        var residents = await dbContext.Actors.AsNoTracking().OfType<NpcActor>()
+            .Where(actor => actor.WorldId == city.WorldId && actor.ResidentCityId == city.Id &&
+                actor.Status == ActorStatus.Active && actor.Job != null)
+            .OrderBy(actor => actor.Id)
+            .ToListAsync(cancellationToken);
+        return residents.Where(actor => IsMerchant(actor.Job!)).ToArray();
+    }
+
+    private static bool IsMerchant(string job) =>
+        job.Contains("merchant", StringComparison.OrdinalIgnoreCase) ||
+        job.Contains("trader", StringComparison.OrdinalIgnoreCase) ||
+        job.Contains("shopkeeper", StringComparison.OrdinalIgnoreCase) ||
+        job.Contains("vendor", StringComparison.OrdinalIgnoreCase);
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         await dbContext.SaveChangesAsync(cancellationToken);

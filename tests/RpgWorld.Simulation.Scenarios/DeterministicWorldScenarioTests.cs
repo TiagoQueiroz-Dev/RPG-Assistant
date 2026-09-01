@@ -164,6 +164,9 @@ public sealed class DeterministicWorldScenarioTests
         public Task<IReadOnlyList<ResourceDeposit>> ListAvailableDepositsAsync(City candidate,
             IReadOnlyCollection<string> resourceCodes, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ResourceDeposit>>([]);
+        public Task<IReadOnlyList<NpcActor>> ListActiveMerchantsAsync(City candidate,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<NpcActor>>([]);
         public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 

@@ -1,3 +1,4 @@
+using RpgWorld.Domain.Actors;
 using RpgWorld.Domain.Worlds.Cities;
 using RpgWorld.Domain.Worlds.Resources;
 
@@ -12,6 +13,10 @@ public interface ICityEconomyRepository
     Task<IReadOnlyList<ResourceDeposit>> ListAvailableDepositsAsync(
         City city,
         IReadOnlyCollection<string> resourceCodes,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<NpcActor>> ListActiveMerchantsAsync(
+        City city,
         CancellationToken cancellationToken = default);
 
     Task SaveChangesAsync(CancellationToken cancellationToken = default);

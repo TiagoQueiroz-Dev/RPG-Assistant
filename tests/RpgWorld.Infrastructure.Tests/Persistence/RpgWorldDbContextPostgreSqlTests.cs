@@ -778,7 +778,8 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal(10m, market.Produced);
         Assert.Equal(10m, market.Consumed);
         Assert.Equal(CityMarketCondition.Shortage, market.Condition);
-        Assert.Equal(CityHistoryEventTypes.ResourceShortage, storedCity.History[^1].EventType);
+        Assert.Contains(storedCity.History,
+            entry => entry.EventType == CityHistoryEventTypes.ResourceShortage);
         Assert.Equal(44m, storedDeposit.Quantity);
         Assert.Equal(ResourceConsumerKind.City, storedDeposit.LastConsumerKind);
         Assert.Equal(cityId, storedDeposit.LastConsumerId);
@@ -1079,6 +1080,92 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Contains(chain, value => value.CausalityDepth == 2);
         Assert.Contains(chain, value => value.CausalityDepth == 3);
         Assert.All(chain.Where(value => value.CausalityDepth > 0), value => Assert.NotNull(value.CausationId));
+    }
+
+    [Fact]
+    public async Task Merchant_death_deterministically_disrupts_trade_stock_price_and_city_satisfaction()
+    {
+        var services = new ServiceCollection();
+        services.AddDbContext<RpgWorldDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+        services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+        services.AddScoped<IWorldConsequenceRepository, EfWorldConsequenceRepository>();
+        services.AddScoped<ICityEconomyRepository, EfCityEconomyRepository>();
+        services.AddScoped<IDomainEventHandler<ActorKilledEvent>, ActorKilledEconomyConsequenceHandler>();
+        await using var provider = services.BuildServiceProvider();
+
+        async Task<MerchantDeathOutcome> RunScenarioAsync(string worldName)
+        {
+            await using var scope = provider.CreateAsyncScope();
+            var context = scope.ServiceProvider.GetRequiredService<RpgWorldDbContext>();
+            await context.Database.MigrateAsync();
+            var start = DateTimeOffset.UnixEpoch;
+            var world = World.Create(worldName, 8, 8);
+            var cityPosition = world.PositionAt(2, 2);
+            var city = City.Create(world, "Market", cityPosition, [cityPosition], 10, 100m, start);
+            var merchant = NpcActor.Create("Food merchant", world, cityPosition, start);
+            merchant.JoinCity(city, start);
+            merchant.AssignJob("merchant", start);
+            var clock = WorldClock.Create(world.Id, start, start, TimeSpan.FromHours(1));
+            context.AddRange(world, city, merchant, clock);
+            await context.SaveChangesAsync();
+            var economy = new CityEconomySimulationSystem(
+                scope.ServiceProvider.GetRequiredService<ICityEconomyRepository>(),
+                new CityEconomyOptions
+                {
+                    Resources =
+                    [
+                        new CityEconomyResourceOptions
+                        {
+                            ResourceCode = "food", ConsumptionPerResident = 1m,
+                            TradeImportPerMerchant = 20m, BasePrice = 2m, TargetStockPerResident = 1m
+                        }
+                    ]
+                });
+
+            clock.AdvanceTicks();
+            await economy.ExecuteAsync(new SimulationTickContext(world.Id,
+                new WorldClockSnapshot(world.Id, clock.CurrentInstant, clock.TickDuration, 1m, start)));
+            var operatingMarket = city.ResourceMarkets["food"];
+            var operatingRoutes = city.ActiveTradeRouteCount;
+            var operatingStock = city.ResourceStocks["food"];
+            var operatingSatisfaction = city.Satisfaction;
+
+            merchant.TakeDamage(merchant.MaximumHealth, null, clock.CurrentInstant.AddMinutes(1));
+            await context.SaveChangesAsync();
+            clock.AdvanceTicks();
+            await economy.ExecuteAsync(new SimulationTickContext(world.Id,
+                new WorldClockSnapshot(world.Id, clock.CurrentInstant, clock.TickDuration, 1m, start)));
+            var disruptedMarket = city.ResourceMarkets["food"];
+            var timeline = (await new EfWorldEventRepository(context).SearchAsync(new WorldEventQuery(
+                world.Id, PageSize: 100, SortOrder: WorldEventSortOrder.OldestFirst))).Items.ToArray();
+            var eventTypes = timeline.Select(value => value.Type).ToArray();
+            var actorKilledIndex = Array.IndexOf(eventTypes, "ActorKilled");
+            var routeDisruptedIndex = Array.LastIndexOf(eventTypes, "CityTradeRoutesChanged");
+            var shortageIndex = Array.LastIndexOf(eventTypes, "CityResourceShortage");
+            var satisfactionIndex = Array.LastIndexOf(eventTypes, "CitySatisfactionChanged");
+
+            Assert.True(actorKilledIndex >= 0 && actorKilledIndex < routeDisruptedIndex);
+            Assert.True(routeDisruptedIndex >= 0 && shortageIndex >= 0 && satisfactionIndex >= 0);
+            Assert.True(timeline[actorKilledIndex].TimestampUtc < timeline[routeDisruptedIndex].TimestampUtc);
+            Assert.Equal(timeline[routeDisruptedIndex].TimestampUtc, timeline[shortageIndex].TimestampUtc);
+            Assert.Equal(timeline[routeDisruptedIndex].TimestampUtc, timeline[satisfactionIndex].TimestampUtc);
+            Assert.Contains(timeline, value => value.Type == "WorldConsequenceApplied" && value.CausalityDepth == 1);
+            return new MerchantDeathOutcome(
+                operatingRoutes, city.ActiveTradeRouteCount,
+                operatingStock, city.ResourceStocks.GetValueOrDefault("food"),
+                operatingMarket.UnitPrice, disruptedMarket.UnitPrice,
+                operatingSatisfaction, city.Satisfaction,
+                string.Join(',', eventTypes.Order(StringComparer.Ordinal)));
+        }
+
+        var first = await RunScenarioAsync("Merchant consequence one");
+        var second = await RunScenarioAsync("Merchant consequence two");
+
+        Assert.Equal(first, second);
+        Assert.Equal((1, 0), (first.OperatingRoutes, first.FinalRoutes));
+        Assert.Equal((10m, 0m), (first.OperatingStock, first.FinalStock));
+        Assert.Equal((2m, 8m), (first.OperatingPrice, first.FinalPrice));
+        Assert.Equal((76m, 71m), (first.OperatingSatisfaction, first.FinalSatisfaction));
     }
 
     [Fact]
@@ -1646,6 +1733,17 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         image.Save(stream, encoder);
         return stream.ToArray();
     }
+
+    private sealed record MerchantDeathOutcome(
+        int OperatingRoutes,
+        int FinalRoutes,
+        decimal OperatingStock,
+        decimal FinalStock,
+        decimal OperatingPrice,
+        decimal FinalPrice,
+        decimal OperatingSatisfaction,
+        decimal FinalSatisfaction,
+        string EventTypes);
 
     private sealed class FixedTimeProvider(DateTimeOffset value) : TimeProvider
     {

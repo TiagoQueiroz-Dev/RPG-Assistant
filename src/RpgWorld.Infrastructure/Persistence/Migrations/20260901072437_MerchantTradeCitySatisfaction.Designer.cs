@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RpgWorld.Infrastructure.Persistence;
@@ -13,9 +14,11 @@ using RpgWorld.Infrastructure.Persistence;
 namespace RpgWorld.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(RpgWorldDbContext))]
-    partial class RpgWorldDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260901072437_MerchantTradeCitySatisfaction")]
+    partial class MerchantTradeCitySatisfaction
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

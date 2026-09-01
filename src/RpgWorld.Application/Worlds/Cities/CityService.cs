@@ -166,6 +166,8 @@ public sealed class CityService(ICityRepository repository) : ICityService
         city.Status.ToString(),
         city.Population,
         city.Wealth,
+        city.Satisfaction,
+        city.ActiveTradeRouteCount,
         city.GoverningFactionId,
         city.Territory.OrderBy(position => position.Y).ThenBy(position => position.X)
             .Select(position => new CityTerritoryPosition(position.X, position.Y)).ToArray(),

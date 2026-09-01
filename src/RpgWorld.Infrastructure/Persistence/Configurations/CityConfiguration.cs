@@ -14,6 +14,8 @@ internal sealed class CityConfiguration : IEntityTypeConfiguration<City>
         {
             table.HasCheckConstraint("ck_cities_population", "population >= 0");
             table.HasCheckConstraint("ck_cities_wealth", "wealth >= 0");
+            table.HasCheckConstraint("ck_cities_satisfaction", "satisfaction >= 0 AND satisfaction <= 100");
+            table.HasCheckConstraint("ck_cities_trade_routes", "active_trade_route_count >= 0");
             table.HasCheckConstraint("ck_cities_version", "version >= 0");
             table.HasCheckConstraint("ck_cities_economic_cycle_count", "economic_cycle_count >= 0");
             table.HasCheckConstraint(
@@ -29,6 +31,8 @@ internal sealed class CityConfiguration : IEntityTypeConfiguration<City>
         builder.Property(city => city.CenterY).HasColumnName("center_y");
         builder.Property(city => city.Population).HasColumnName("population");
         builder.Property(city => city.Wealth).HasColumnName("wealth").HasPrecision(18, 2);
+        builder.Property(city => city.Satisfaction).HasColumnName("satisfaction").HasPrecision(5, 2).HasDefaultValue(75m);
+        builder.Property(city => city.ActiveTradeRouteCount).HasColumnName("active_trade_route_count").HasDefaultValue(0);
         builder.Property(city => city.GoverningFactionId).HasColumnName("governing_faction_id");
         builder.Property(city => city.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(24);
         builder.Property(city => city.FoundedAtUtc).HasColumnName("founded_at_utc");

@@ -41,5 +41,7 @@ public static class CityHistoryEventTypes
     public const string ResourceShortage = "resource-shortage";
     public const string ResourceSurplus = "resource-surplus";
     public const string EconomyBalanced = "economy-balanced";
+    public const string TradeRoutesChanged = "trade-routes-changed";
+    public const string SatisfactionChanged = "satisfaction-changed";
     public const string Destroyed = "destroyed";
 }

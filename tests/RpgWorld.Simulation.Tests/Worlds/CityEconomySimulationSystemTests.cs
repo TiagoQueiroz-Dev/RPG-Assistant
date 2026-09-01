@@ -1,4 +1,5 @@
 using RpgWorld.Application.Worlds.Cities;
+using RpgWorld.Domain.Actors;
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Domain.Worlds.Cities;
 using RpgWorld.Domain.Worlds.Definitions;
@@ -99,8 +100,8 @@ public sealed class CityEconomySimulationSystemTests
         Assert.Equal(20m, market.UnmetDemand);
         Assert.Equal(CityMarketCondition.Shortage, market.Condition);
         Assert.Equal(8m, market.UnitPrice);
-        Assert.IsType<RpgWorld.Domain.Events.CityResourceShortageEvent>(Assert.Single(city.DomainEvents));
-        Assert.Equal(CityHistoryEventTypes.ResourceShortage, city.History[^1].EventType);
+        Assert.Contains(city.DomainEvents, value => value is RpgWorld.Domain.Events.CityResourceShortageEvent);
+        Assert.Contains(city.History, value => value.EventType == CityHistoryEventTypes.ResourceShortage);
     }
 
     private sealed class FakeCityEconomyRepository(City city, params ResourceDeposit[] deposits)
@@ -119,6 +120,11 @@ public sealed class CityEconomySimulationSystemTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ResourceDeposit>>(deposits
                 .Where(deposit => resourceCodes.Contains(deposit.ResourceCode)).ToArray());
+
+        public Task<IReadOnlyList<NpcActor>> ListActiveMerchantsAsync(
+            City candidate,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<NpcActor>>([]);
 
         public Task SaveChangesAsync(CancellationToken cancellationToken = default)
         {

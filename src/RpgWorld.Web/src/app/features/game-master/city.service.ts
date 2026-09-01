@@ -9,6 +9,8 @@ export interface CityMasterView {
   readonly status: 'Active' | 'Crisis' | 'Destroyed';
   readonly population: number;
   readonly wealth: number;
+  readonly satisfaction: number;
+  readonly activeTradeRouteCount: number;
   readonly resourceStocks: Readonly<Record<string, number>>;
   readonly resourceMarkets: Readonly<Record<string, CityResourceMarketView>>;
   readonly economicCycleCount: number;

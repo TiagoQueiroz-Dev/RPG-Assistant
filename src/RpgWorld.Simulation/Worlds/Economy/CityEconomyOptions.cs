@@ -11,13 +11,17 @@ public sealed class CityEconomyOptions
         Resources =
         [
             new() { ResourceCode = "food", NaturalResourceCode = "food", NaturalExtractionPerResident = 1.10m,
-                ConsumptionPerResident = 1m, ProductionPerBuilding = 2m, BasePrice = 2m, TargetStockPerResident = 2m },
+                ConsumptionPerResident = 1m, ProductionPerBuilding = 2m, TradeImportPerMerchant = 5m,
+                BasePrice = 2m, TargetStockPerResident = 2m },
             new() { ResourceCode = "wood", NaturalResourceCode = "wood", NaturalExtractionPerResident = 0.15m,
-                ConsumptionPerResident = 0.10m, ProductionPerBuilding = 0.50m, BasePrice = 4m, TargetStockPerResident = 1m },
+                ConsumptionPerResident = 0.10m, ProductionPerBuilding = 0.50m, TradeImportPerMerchant = 1m,
+                BasePrice = 4m, TargetStockPerResident = 1m },
             new() { ResourceCode = "stone", NaturalResourceCode = "stone", NaturalExtractionPerResident = 0.08m,
-                ConsumptionPerResident = 0.05m, ProductionPerBuilding = 0.25m, BasePrice = 6m, TargetStockPerResident = 0.50m },
+                ConsumptionPerResident = 0.05m, ProductionPerBuilding = 0.25m, TradeImportPerMerchant = 0.5m,
+                BasePrice = 6m, TargetStockPerResident = 0.50m },
             new() { ResourceCode = "gold", NaturalResourceCode = "gold", NaturalExtractionPerResident = 0.03m,
-                ConsumptionPerResident = 0.02m, ProductionPerBuilding = 0.05m, BasePrice = 20m, TargetStockPerResident = 0.25m }
+                ConsumptionPerResident = 0.02m, ProductionPerBuilding = 0.05m, TradeImportPerMerchant = 0.25m,
+                BasePrice = 20m, TargetStockPerResident = 0.25m }
         ]
     };
 
@@ -42,6 +46,7 @@ public sealed class CityEconomyResourceOptions
     public decimal BaselineProductionPerResident { get; set; }
     public decimal NaturalExtractionPerResident { get; set; }
     public decimal ProductionPerBuilding { get; set; }
+    public decimal TradeImportPerMerchant { get; set; }
     public decimal ConsumptionPerResident { get; set; }
     public decimal BasePrice { get; set; }
     public decimal TargetStockPerResident { get; set; }
@@ -62,6 +67,7 @@ public sealed class CityEconomyResourceOptions
         if (BaselineProductionPerResident < 0m) throw new InvalidOperationException("Baseline production cannot be negative.");
         if (NaturalExtractionPerResident < 0m) throw new InvalidOperationException("Natural extraction cannot be negative.");
         if (ProductionPerBuilding < 0m) throw new InvalidOperationException("Building production cannot be negative.");
+        if (TradeImportPerMerchant < 0m) throw new InvalidOperationException("Trade imports cannot be negative.");
         if (NaturalExtractionPerResident > 0m && NormalizedNaturalResourceCode is null)
             throw new InvalidOperationException($"Resource '{ResourceCode}' requires a natural resource code.");
     }

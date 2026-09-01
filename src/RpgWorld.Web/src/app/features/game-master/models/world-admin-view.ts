@@ -16,6 +16,8 @@ export interface AdminCitySummary {
   readonly foodStockDays: number;
   readonly status?: 'Active' | 'Crisis' | 'Destroyed';
   readonly wealth?: number;
+  readonly satisfaction?: number;
+  readonly activeTradeRouteCount?: number;
   readonly foodPrice?: number;
   readonly foodMarketCondition?: 'Balanced' | 'Shortage' | 'Surplus';
 }

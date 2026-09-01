@@ -138,7 +138,9 @@ public sealed class CityTests
         Assert.Equal(0m, shortMarket.ClosingStock);
         Assert.Equal(8m, shortMarket.UnitPrice);
         Assert.Equal(CityMarketCondition.Shortage, shortMarket.Condition);
-        Assert.IsType<CityResourceShortageEvent>(Assert.Single(city.DomainEvents));
+        Assert.Contains(city.DomainEvents, value => value is CityResourceShortageEvent);
+        Assert.Contains(city.DomainEvents, value => value is CitySatisfactionChangedEvent);
+        Assert.Equal(65m, city.Satisfaction);
 
         city.ClearDomainEvents();
         var surplus = city.RunEconomicCycle(
@@ -151,10 +153,29 @@ public sealed class CityTests
         Assert.Equal(40m, surplusMarket.ClosingStock);
         Assert.Equal(1m, surplusMarket.UnitPrice);
         Assert.Equal(CityMarketCondition.Surplus, surplusMarket.Condition);
-        Assert.IsType<CityResourceSurplusEvent>(Assert.Single(city.DomainEvents));
+        Assert.Contains(city.DomainEvents, value => value is CityResourceSurplusEvent);
+        Assert.Contains(city.DomainEvents, value => value is CitySatisfactionChangedEvent);
+        Assert.Equal(66m, city.Satisfaction);
         Assert.Equal(2, city.EconomicCycleCount);
         Assert.Equal(now.AddHours(3), city.LastEconomicCycleAtUtc);
         Assert.Equal(surplusMarket, city.ResourceMarkets["food"]);
+    }
+
+    [Fact]
+    public void Economy_cycle_tracks_trade_route_changes_and_satisfaction()
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var (_, city) = CreateCity(initialPopulation: 10);
+        var rule = new CityResourceEconomyRule("food", 1m, 2m, 1m);
+        city.ClearDomainEvents();
+
+        city.RunEconomicCycle([rule], new Dictionary<string, decimal> { ["food"] = 20m },
+            now.AddHours(1), activeTradeRouteCount: 1);
+
+        Assert.Equal(1, city.ActiveTradeRouteCount);
+        Assert.Equal(76m, city.Satisfaction);
+        Assert.Contains(city.DomainEvents, value => value is CityTradeRoutesChangedEvent);
+        Assert.Contains(city.History, value => value.EventType == CityHistoryEventTypes.TradeRoutesChanged);
     }
 
     [Fact]

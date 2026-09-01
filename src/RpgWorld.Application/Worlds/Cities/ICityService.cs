@@ -25,6 +25,8 @@ public sealed record CityMasterView(
     string Status,
     int Population,
     decimal Wealth,
+    decimal Satisfaction,
+    int ActiveTradeRouteCount,
     Guid? GoverningFactionId,
     IReadOnlyList<CityTerritoryPosition> Territory,
     IReadOnlyList<Guid> ResidentActorIds,

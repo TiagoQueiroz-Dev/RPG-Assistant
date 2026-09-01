@@ -429,6 +429,8 @@ export class GameMasterShell implements OnDestroy {
           foodStockDays: Math.floor((city.resourceStocks['food'] ?? 0) / Math.max(1, city.population)),
           status: city.status,
           wealth: city.wealth,
+          satisfaction: city.satisfaction,
+          activeTradeRouteCount: city.activeTradeRouteCount,
           foodPrice: city.resourceMarkets['food']?.unitPrice,
           foodMarketCondition: city.resourceMarkets['food']?.condition,
         })),
