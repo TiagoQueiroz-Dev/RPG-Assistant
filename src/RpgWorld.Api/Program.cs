@@ -47,8 +47,21 @@ builder.Services.AddSimulation(
         TickInterval = TimeSpan.FromMilliseconds(
             builder.Configuration.GetValue<double?>("Simulation:TickIntervalMilliseconds")
             ?? SimulationEngineOptions.DefaultTickInterval.TotalMilliseconds),
+        TickBudget = TimeSpan.FromMilliseconds(
+            builder.Configuration.GetValue<double?>("Simulation:TickBudgetMilliseconds")
+            ?? SimulationEngineOptions.DefaultTickBudget.TotalMilliseconds),
+        SystemBudget = TimeSpan.FromMilliseconds(
+            builder.Configuration.GetValue<double?>("Simulation:SystemBudgetMilliseconds")
+            ?? SimulationEngineOptions.DefaultSystemBudget.TotalMilliseconds),
         SystemFrequencyOverrides = builder.Configuration
             .GetSection("Simulation:SystemFrequencyOverrides")
+            .GetChildren()
+            .ToDictionary(
+                entry => entry.Key,
+                entry => TimeSpan.Parse(entry.Value!, CultureInfo.InvariantCulture),
+                StringComparer.OrdinalIgnoreCase),
+        SystemBudgetOverrides = builder.Configuration
+            .GetSection("Simulation:SystemBudgetOverrides")
             .GetChildren()
             .ToDictionary(
                 entry => entry.Key,
@@ -697,6 +710,13 @@ app.MapGet(
     "/api/worlds/{worldId:guid}/simulation/diagnostics",
     (Guid worldId, ISimulationScheduler scheduler) =>
         Results.Ok(scheduler.GetDiagnostics(worldId)));
+
+app.MapGet(
+    "/api/worlds/{worldId:guid}/simulation/performance",
+    (HttpContext httpContext, Guid worldId, ISimulationPerformanceMetrics metrics) =>
+        GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)
+            ? Results.Ok(metrics.GetSnapshot(worldId))
+            : Results.StatusCode(403));
 
 app.MapPut(
     "/api/worlds/{worldId:guid}/tiles/{x:int}/{y:int}/biome",

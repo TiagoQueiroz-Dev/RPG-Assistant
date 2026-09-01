@@ -23,6 +23,7 @@ public sealed class NpcNeedsSimulationSystem(
             : (await settingsProvider.GetEffectiveAsync(context.WorldId, cancellationToken)).NPCDensity;
         var processingCount = Math.Min(npcs.Count,
             Math.Max(1, (int)decimal.Ceiling(npcs.Count * Math.Min(1m, density))));
+        context.RecordActorsProcessed(processingCount);
         var changed = false;
         foreach (var npc in npcs.Take(processingCount))
         {

@@ -6,6 +6,7 @@ using RpgWorld.Domain.Worlds;
 using RpgWorld.Simulation.Engine;
 using RpgWorld.Simulation.Time;
 using RpgWorld.Simulation;
+using RpgWorld.Simulation.Chunks;
 
 namespace RpgWorld.Simulation.Tests.Engine;
 
@@ -132,6 +133,71 @@ public sealed class SimulationEngineTests
     }
 
     [Fact]
+    public void Performance_metrics_report_average_maximum_workload_and_late_ticks()
+    {
+        using var metrics = new SimulationPerformanceMetrics();
+        var worldId = Guid.NewGuid();
+        var first = new SimulationTickWorkload(3);
+        first.RecordActors(100);
+        var second = new SimulationTickWorkload(5);
+        second.RecordActors(200);
+
+        metrics.RecordCycle(1, TimeSpan.FromMilliseconds(30));
+        metrics.RecordTick(worldId, TimeSpan.FromMilliseconds(40), first, TimeSpan.FromMilliseconds(50));
+        metrics.RecordTick(worldId, TimeSpan.FromMilliseconds(80), second, TimeSpan.FromMilliseconds(50));
+        metrics.RecordSystem(worldId, "NpcNeeds", TimeSpan.FromMilliseconds(20), 100,
+            TimeSpan.FromMilliseconds(25), true);
+        metrics.RecordSystem(worldId, "NpcNeeds", TimeSpan.FromMilliseconds(40), 200,
+            TimeSpan.FromMilliseconds(25), false);
+
+        var snapshot = metrics.GetSnapshot(worldId);
+        var system = Assert.Single(snapshot.Systems);
+        Assert.Equal((2L, 1L, 60d, 80d),
+            (snapshot.TickCount, snapshot.LateTickCount, snapshot.AverageTickDurationMilliseconds,
+                snapshot.MaximumTickDurationMilliseconds));
+        Assert.Equal((200L, 300L, 5),
+            (snapshot.LastActorsProcessed, snapshot.TotalActorsProcessed, snapshot.LastActiveChunkCount));
+        Assert.Equal((30d, 40d, 1L, 1L, 300L),
+            (system.AverageDurationMilliseconds, system.MaximumDurationMilliseconds,
+                system.BudgetExceededCount, system.FailureCount, system.TotalActorsProcessed));
+    }
+
+    [Fact]
+    public void Benchmark_comparison_detects_only_significant_regressions_at_matching_scales()
+    {
+        var regressions = SimulationBenchmarkComparer.Compare(
+            [new(100, 10), new(1_000, 100)],
+            [new(100, 11), new(1_000, 130), new(5_000, 500)],
+            maximumRegressionPercent: 20);
+
+        var regression = Assert.Single(regressions);
+        Assert.Equal(1_000, regression.ActorCount);
+        Assert.Equal(30d, regression.RegressionPercent, precision: 6);
+    }
+
+    [Fact]
+    public async Task Late_tick_and_slow_system_generate_structured_diagnostics()
+    {
+        var worldId = Guid.NewGuid();
+        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var engineLogger = new RecordingLogger<SimulationEngine>();
+        var runnerLogger = new RecordingLogger<SimulationSystemRunner>();
+        await using var provider = CreateProvider(
+            new FakeWorldSimulationRepository([worldId]),
+            new RecordingClockService(),
+            new AdvancingSystem(time, TimeSpan.FromMilliseconds(100), 1_000));
+
+        await CreateEngine(provider, engineLogger, time, runnerLogger).RunCycleAsync();
+
+        var snapshot = provider.GetRequiredService<ISimulationPerformanceMetrics>().GetSnapshot(worldId);
+        Assert.Equal((1L, 1_000L), (snapshot.LateTickCount, snapshot.LastActorsProcessed));
+        Assert.Contains(engineLogger.Entries, entry => entry.Level == LogLevel.Warning &&
+            entry.Message.Contains("1000", StringComparison.Ordinal));
+        Assert.Contains(runnerLogger.Entries, entry => entry.Level == LogLevel.Warning &&
+            entry.Message.Contains("measured", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Failed_system_is_logged_without_preventing_remaining_systems()
     {
         var worldId = Guid.NewGuid();
@@ -201,9 +267,15 @@ public sealed class SimulationEngineTests
 
         var options = new SimulationEngineOptions
         {
-            TickInterval = TimeSpan.FromMilliseconds(10)
+            TickInterval = TimeSpan.FromMilliseconds(10),
+            TickBudget = TimeSpan.FromMilliseconds(50),
+            SystemBudget = TimeSpan.FromMilliseconds(50)
         };
         services.AddSingleton(options);
+        services.AddSingleton<ActiveChunkRegistry>();
+        services.AddSingleton<SimulationPerformanceMetrics>();
+        services.AddSingleton<ISimulationPerformanceMetrics>(provider =>
+            provider.GetRequiredService<SimulationPerformanceMetrics>());
         services.AddSingleton<ISimulationScheduler, SimulationScheduler>();
         services.AddSingleton<IWorldCommandGate, WorldCommandGate>();
 
@@ -222,6 +294,8 @@ public sealed class SimulationEngineTests
             scopeFactory,
             effectiveTimeProvider,
             provider.GetRequiredService<ISimulationScheduler>(),
+            provider.GetRequiredService<SimulationEngineOptions>(),
+            provider.GetRequiredService<ISimulationPerformanceMetrics>(),
             runnerLogger ?? new RecordingLogger<SimulationSystemRunner>());
         return new SimulationEngine(
             scopeFactory,
@@ -229,6 +303,8 @@ public sealed class SimulationEngineTests
             effectiveTimeProvider,
             provider.GetRequiredService<IWorldCommandGate>(),
             runner,
+            provider.GetRequiredService<ActiveChunkRegistry>(),
+            provider.GetRequiredService<ISimulationPerformanceMetrics>(),
             logger ?? new RecordingLogger<SimulationEngine>());
     }
 
@@ -373,6 +449,23 @@ public sealed class SimulationEngineTests
                 CancellationObserved = true;
                 throw;
             }
+        }
+    }
+
+    private sealed class AdvancingSystem(
+        ManualTimeProvider timeProvider,
+        TimeSpan duration,
+        int actorsProcessed) : ISimulationSystem
+    {
+        public string Name => "measured";
+        public int Order => 0;
+        public TimeSpan Frequency => TimeSpan.FromMilliseconds(10);
+
+        public Task ExecuteAsync(SimulationTickContext context, CancellationToken cancellationToken = default)
+        {
+            context.RecordActorsProcessed(actorsProcessed);
+            timeProvider.Advance(duration);
+            return Task.CompletedTask;
         }
     }
 

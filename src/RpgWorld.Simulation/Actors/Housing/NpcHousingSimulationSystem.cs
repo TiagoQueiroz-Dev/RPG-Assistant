@@ -20,6 +20,7 @@ public sealed class NpcHousingSimulationSystem(
         if (world is null) return;
         var changed = false;
         var active = await repository.ListInProgressAsync(context.WorldId, cancellationToken);
+        context.RecordActorsProcessed(active.Count);
         foreach (var construction in active)
         {
             if (await repository.GetNpcAsync(construction.OwnerActorId, cancellationToken) is not { } owner ||
@@ -53,6 +54,7 @@ public sealed class NpcHousingSimulationSystem(
 
         var activeOwners = active.Select(construction => construction.OwnerActorId).ToHashSet();
         var homeless = await repository.ListHomelessAsync(context.WorldId, cancellationToken);
+        context.RecordActorsProcessed(homeless.Count);
         foreach (var npc in homeless.Where(npc => !activeOwners.Contains(npc.Id)))
         {
             if (!npc.Goals.Any(goal => goal.Code == NpcGoalCodes.NeedHouse))

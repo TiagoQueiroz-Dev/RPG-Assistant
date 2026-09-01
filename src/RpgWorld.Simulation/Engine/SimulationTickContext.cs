@@ -4,4 +4,8 @@ namespace RpgWorld.Simulation.Engine;
 
 public sealed record SimulationTickContext(
     Guid WorldId,
-    WorldClockSnapshot Clock);
+    WorldClockSnapshot Clock,
+    SimulationTickWorkload? Workload = null)
+{
+    public void RecordActorsProcessed(int count) => Workload?.RecordActors(count);
+}

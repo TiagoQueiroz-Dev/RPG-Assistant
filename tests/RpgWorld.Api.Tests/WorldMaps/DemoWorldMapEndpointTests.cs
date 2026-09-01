@@ -10,6 +10,7 @@ using System.Security.Claims;
 using RpgWorld.Api.Realtime;
 using RpgWorld.Api.WorldMaps;
 using RpgWorld.Simulation.Time;
+using RpgWorld.Simulation.Engine;
 using RpgWorld.Application.Actors.Movement;
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Application.Actors.Inspection;
@@ -112,6 +113,7 @@ public sealed class DemoWorldMapEndpointTests
             JsonRequest(HttpMethod.Post, $"/api/worlds/{worldId}/custom-content",
                 new { kind = "Creature", code = "secret", name = "Secret", payload = new { maximumHealth = 10 } }),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/simulation/settings"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/simulation/performance"),
             JsonRequest(HttpMethod.Put, $"/api/worlds/{worldId}/simulation/settings", new
             {
                 npcDensity = 1, creatureSpawnRate = 1, warFrequency = 1, economicDifficulty = 1,
@@ -272,6 +274,21 @@ public sealed class DemoWorldMapEndpointTests
         var recorded = factory.Services.GetRequiredService<RecordingCampaignSimulationSettingsService>();
         Assert.Equal(worldId, recorded.WorldId);
         Assert.Equal(3m, recorded.Request?.WarFrequency);
+    }
+
+    [Fact]
+    public async Task Game_master_can_read_world_simulation_performance_metrics()
+    {
+        using var factory = new MapWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var worldId = Guid.NewGuid();
+        client.DefaultRequestHeaders.Add("X-Test-Game-Master-World", worldId.ToString());
+
+        var metrics = await client.GetFromJsonAsync<SimulationPerformanceSnapshot>(
+            $"/api/worlds/{worldId}/simulation/performance");
+
+        Assert.Equal(worldId, metrics!.WorldId);
+        Assert.Equal(0, metrics.TickCount);
     }
 
     [Fact]

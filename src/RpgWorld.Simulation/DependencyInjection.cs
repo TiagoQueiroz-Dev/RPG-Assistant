@@ -34,6 +34,9 @@ public static class DependencyInjection
         services.AddSingleton(chunkActivationOptions ?? new ChunkActivationOptions());
         services.AddSingleton<ActiveChunkRegistry>();
         services.AddSingleton(simulationEngineOptions ?? new SimulationEngineOptions());
+        services.AddSingleton<SimulationPerformanceMetrics>();
+        services.AddSingleton<ISimulationPerformanceMetrics>(provider =>
+            provider.GetRequiredService<SimulationPerformanceMetrics>());
         services.AddSingleton<ISimulationScheduler, SimulationScheduler>();
         services.AddSingleton<IWorldCommandGate, WorldCommandGate>();
         services.AddSingleton<ISimulationSystemRunner, SimulationSystemRunner>();

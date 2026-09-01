@@ -49,12 +49,14 @@ public sealed class NpcNeedsSimulationSystemTests
         var repository = new FakeNpcNeedsRepository(first, second);
         var system = new NpcNeedsSimulationSystem(repository, new FixedSettingsProvider(0.5m));
         var instant = start.AddHours(1);
+        var workload = new SimulationTickWorkload(0);
 
         await system.ExecuteAsync(new SimulationTickContext(world.Id,
-            new WorldClockSnapshot(world.Id, instant, TimeSpan.FromHours(1), 1m, instant)));
+            new WorldClockSnapshot(world.Id, instant, TimeSpan.FromHours(1), 1m, instant), workload));
 
         Assert.Equal(instant, first.NeedsUpdatedAt);
         Assert.Equal(start, second.NeedsUpdatedAt);
+        Assert.Equal(1, workload.ActorsProcessed);
     }
 
     private sealed class FakeNpcNeedsRepository(params NpcActor[] npcs) : INpcNeedsRepository

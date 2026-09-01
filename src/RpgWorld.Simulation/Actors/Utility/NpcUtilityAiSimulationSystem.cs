@@ -52,6 +52,7 @@ public sealed class NpcUtilityAiSimulationSystem : ISimulationSystem
         CancellationToken cancellationToken = default)
     {
         var npcs = await _repository.ListForUpdateAsync(context.WorldId, cancellationToken);
+        context.RecordActorsProcessed(npcs.Count);
         var relevantMemories = await _memories.ListRelevantForActorsAsync(
             npcs.Select(npc => npc.Id).ToArray(),
             context.Clock.CurrentInstant,

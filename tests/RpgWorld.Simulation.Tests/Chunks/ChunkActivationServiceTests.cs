@@ -116,6 +116,7 @@ public sealed class ChunkActivationServiceTests
             regionSimulationService: null,
             registry);
         await activationScope.SynchronizeAsync(world, [world.PositionAt(0, 0)]);
+        Assert.Equal(2, registry.Count(world.Id));
         var actorId = Guid.NewGuid();
         Assert.True(activationScope.TryGetActiveChunk(world.Id, new ChunkCoordinate(0, 0), out var origin));
         Assert.True(activationScope.TryGetActiveChunk(world.Id, new ChunkCoordinate(1, 0), out var destination));
