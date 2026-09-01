@@ -1435,7 +1435,9 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
                 "\"maximumTemperatureCelsius\":40,\"minimumHumidity\":0.2,\"maximumHumidity\":0.9}"));
             await service.CreateAsync(world.Id, new CustomContentRequest(
                 CustomContentKind.Rule, "movement", "Homebrew Movement", "{\"parameters\":{\"diagonal-cost\":1.5}}"));
-            foreach (var kind in new[] { CustomContentKind.Npc, CustomContentKind.Class,
+            await service.CreateAsync(world.Id, new CustomContentRequest(
+                CustomContentKind.Npc, "guide", "Campaign Guide", "{\"maximumHealth\":90,\"defaultJob\":\"guide\"}"));
+            foreach (var kind in new[] { CustomContentKind.Class,
                          CustomContentKind.Faction, CustomContentKind.Event })
                 await service.CreateAsync(world.Id, new CustomContentRequest(
                     kind, $"custom-{kind.ToString().ToLowerInvariant()}", $"Custom {kind}", "{\"notes\":\"versionable\"}"));
@@ -1447,6 +1449,7 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
             var catalog = await service.ResolveCatalogAsync(world.Id);
             Assert.Equal(("Dire Wolf", 220), (catalog.ResolveCreature("wolf").Name, catalog.ResolveCreature("wolf").MaximumHealth));
             Assert.Equal("moon-key", catalog.ResolveItem("moon-key").Code);
+            Assert.Equal("guide", catalog.ResolveNpc("guide").DefaultJob);
             Assert.Equal("ashen-forest", catalog.ResolveBiome("ashen-forest").Code);
             Assert.Equal(1.5m, catalog.ResolveRule("movement").Parameters["diagonal-cost"]);
             await Assert.ThrowsAsync<ArgumentException>(() => service.CreateAsync(world.Id, new CustomContentRequest(

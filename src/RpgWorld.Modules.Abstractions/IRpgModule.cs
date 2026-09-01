@@ -40,6 +40,7 @@ public sealed record RpgModuleMetadata
 public interface IRpgModule : IWorldDefinitionModule, IActorDefinitionModule
 {
     RpgModuleMetadata Metadata { get; }
+    IEnumerable<NpcDefinition> Npcs => [];
     IEnumerable<CreatureDefinition> Creatures => [];
     IEnumerable<ItemDefinition> Items => [];
     IEnumerable<RuleDefinition> Rules => [];

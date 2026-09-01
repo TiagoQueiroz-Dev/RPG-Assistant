@@ -7,9 +7,11 @@ namespace RpgWorld.Modules.Abstractions;
 public interface IRpgContentCatalog : IWorldDefinitionCatalog, ITraitDefinitionCatalog
 {
     IReadOnlyCollection<RpgModuleMetadata> Modules { get; }
+    IReadOnlyCollection<NpcDefinition> Npcs { get; }
     IReadOnlyCollection<CreatureDefinition> Creatures { get; }
     IReadOnlyCollection<ItemDefinition> Items { get; }
     IReadOnlyCollection<RuleDefinition> Rules { get; }
+    NpcDefinition ResolveNpc(string code);
     CreatureDefinition ResolveCreature(string code);
     ItemDefinition ResolveItem(string code);
     RuleDefinition ResolveRule(string code);

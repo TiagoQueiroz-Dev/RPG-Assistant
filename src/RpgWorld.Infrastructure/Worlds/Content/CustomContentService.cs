@@ -74,7 +74,8 @@ public sealed class CustomContentService(
             values.Where(value => value.Kind == CustomContentKind.Creature).Select(Creature),
             values.Where(value => value.Kind == CustomContentKind.Item).Select(Item),
             values.Where(value => value.Kind == CustomContentKind.Biome).Select(Biome),
-            values.Where(value => value.Kind == CustomContentKind.Rule).Select(Rule));
+            values.Where(value => value.Kind == CustomContentKind.Rule).Select(Rule),
+            values.Where(value => value.Kind == CustomContentKind.Npc).Select(Npc));
     }
 
     private void Validate(CustomContentKind kind, string code, string name, string payload)
@@ -84,6 +85,7 @@ public sealed class CustomContentService(
         {
             case CustomContentKind.Creature: _ = Creature(candidate); break;
             case CustomContentKind.Item: _ = Item(candidate); break;
+            case CustomContentKind.Npc: _ = Npc(candidate); break;
             case CustomContentKind.Biome: _ = Biome(candidate); break;
             case CustomContentKind.Rule: _ = Rule(candidate); break;
         }
@@ -99,6 +101,12 @@ public sealed class CustomContentService(
     {
         var payload = Deserialize<ItemPayload>(value);
         return new ItemDefinition(value.Code, value.Name, payload.Category, payload.Stackable, payload.Tags);
+    }
+
+    private static NpcDefinition Npc(CustomContentDefinition value)
+    {
+        var payload = Deserialize<NpcPayload>(value);
+        return new NpcDefinition(value.Code, value.Name, payload.MaximumHealth, payload.DefaultJob, payload.Tags);
     }
 
     private BiomeDefinition Biome(CustomContentDefinition value)
@@ -142,6 +150,7 @@ public sealed class CustomContentService(
 
     private sealed record CreaturePayload(int MaximumHealth, string[]? Tags);
     private sealed record ItemPayload(string Category, bool Stackable, string[]? Tags);
+    private sealed record NpcPayload(int MaximumHealth, string? DefaultJob, string[]? Tags);
     private sealed record BiomePayload(
         string TerrainCode,
         decimal MinimumTemperatureCelsius,

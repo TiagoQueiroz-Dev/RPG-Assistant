@@ -1,5 +1,26 @@
 namespace RpgWorld.Modules.Abstractions.Definitions;
 
+public sealed record NpcDefinition
+{
+    public NpcDefinition(
+        string code, string name, int maximumHealth, string? defaultJob = null, IEnumerable<string>? tags = null)
+    {
+        Code = ContentDefinitionValidation.Code(code, nameof(code));
+        Name = ContentDefinitionValidation.Name(name, nameof(name));
+        if (maximumHealth <= 0) throw new ArgumentOutOfRangeException(nameof(maximumHealth));
+        if (defaultJob is { Length: > 120 }) throw new ArgumentException("Default job is too long.", nameof(defaultJob));
+        MaximumHealth = maximumHealth;
+        DefaultJob = string.IsNullOrWhiteSpace(defaultJob) ? null : defaultJob.Trim();
+        Tags = ContentDefinitionValidation.Tags(tags);
+    }
+
+    public string Code { get; }
+    public string Name { get; }
+    public int MaximumHealth { get; }
+    public string? DefaultJob { get; }
+    public IReadOnlySet<string> Tags { get; }
+}
+
 public sealed record CreatureDefinition
 {
     public CreatureDefinition(string code, string name, int maximumHealth, IEnumerable<string>? tags = null)

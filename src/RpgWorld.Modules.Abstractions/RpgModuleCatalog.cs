@@ -68,6 +68,7 @@ internal sealed class RpgContentCatalog : IRpgContentCatalog
 {
     private readonly WorldDefinitionCatalog _world;
     private readonly TraitDefinitionCatalog _traits;
+    private readonly IReadOnlyDictionary<string, NpcDefinition> _npcs;
     private readonly IReadOnlyDictionary<string, CreatureDefinition> _creatures;
     private readonly IReadOnlyDictionary<string, ItemDefinition> _items;
     private readonly IReadOnlyDictionary<string, RuleDefinition> _rules;
@@ -80,12 +81,14 @@ internal sealed class RpgContentCatalog : IRpgContentCatalog
             modules.SelectMany(value => value.Biomes),
             modules.SelectMany(value => value.Resources));
         _traits = new TraitDefinitionCatalog(modules.SelectMany(value => value.Traits));
+        _npcs = Index(modules.SelectMany(value => value.Npcs), value => value.Code, "NPC");
         _creatures = Index(modules.SelectMany(value => value.Creatures), value => value.Code, "creature");
         _items = Index(modules.SelectMany(value => value.Items), value => value.Code, "item");
         _rules = Index(modules.SelectMany(value => value.Rules), value => value.Code, "rule");
         Creatures = _creatures.Values.OrderBy(value => value.Code, StringComparer.Ordinal).ToArray();
         Items = _items.Values.OrderBy(value => value.Code, StringComparer.Ordinal).ToArray();
         Rules = _rules.Values.OrderBy(value => value.Code, StringComparer.Ordinal).ToArray();
+        Npcs = _npcs.Values.OrderBy(value => value.Code, StringComparer.Ordinal).ToArray();
     }
 
     public IReadOnlyCollection<RpgModuleMetadata> Modules { get; }
@@ -93,6 +96,7 @@ internal sealed class RpgContentCatalog : IRpgContentCatalog
     public IReadOnlyCollection<BiomeDefinition> Biomes => _world.Biomes;
     public IReadOnlyCollection<ResourceDefinition> Resources => _world.Resources;
     public IReadOnlyCollection<TraitDefinition> Traits => _traits.Traits;
+    public IReadOnlyCollection<NpcDefinition> Npcs { get; }
     public IReadOnlyCollection<CreatureDefinition> Creatures { get; }
     public IReadOnlyCollection<ItemDefinition> Items { get; }
     public IReadOnlyCollection<RuleDefinition> Rules { get; }
@@ -104,6 +108,7 @@ internal sealed class RpgContentCatalog : IRpgContentCatalog
     public bool TryResolveResource(string code, out ResourceDefinition? resource) => _world.TryResolveResource(code, out resource);
     public TraitDefinition Resolve(string code) => _traits.Resolve(code);
     public bool TryResolve(string code, out TraitDefinition? trait) => _traits.TryResolve(code, out trait);
+    public NpcDefinition ResolveNpc(string code) => Resolve(_npcs, code, "NPC");
     public CreatureDefinition ResolveCreature(string code) => Resolve(_creatures, code, "Creature");
     public ItemDefinition ResolveItem(string code) => Resolve(_items, code, "Item");
     public RuleDefinition ResolveRule(string code) => Resolve(_rules, code, "Rule");

@@ -23,6 +23,10 @@ public sealed class DefaultRpgModule : IRpgModule
     public IEnumerable<BiomeDefinition> Biomes => _world.Biomes;
     public IEnumerable<ResourceDefinition> Resources => _world.Resources;
     public IEnumerable<TraitDefinition> Traits => _actors.Traits;
+    public IEnumerable<NpcDefinition> Npcs =>
+    [
+        new("human-commoner", "Human Commoner", 100, "worker", ["human", "civilian"])
+    ];
     public IEnumerable<CreatureDefinition> Creatures =>
     [
         new("wolf", "Wolf", 35, ["beast", "wildlife"]),
@@ -36,6 +40,11 @@ public sealed class DefaultRpgModule : IRpgModule
     public IEnumerable<RuleDefinition> Rules =>
     [
         new("movement", "Movement", new Dictionary<string, decimal> { ["diagonal-cost"] = 1m }),
-        new("perception", "Perception", new Dictionary<string, decimal> { ["base-radius"] = 2m })
+        new("perception", "Perception", new Dictionary<string, decimal> { ["base-radius"] = 2m }),
+        new("survival", "Survival", new Dictionary<string, decimal>
+        {
+            ["hunger-per-hour"] = 4m,
+            ["energy-per-hour"] = 3m
+        })
     ];
 }

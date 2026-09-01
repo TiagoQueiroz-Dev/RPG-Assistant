@@ -20,9 +20,12 @@ public sealed class RpgModuleCatalogTests
 
         Assert.Equal("rpgworld.default", Assert.Single(modules.AvailableModules).Id);
         Assert.Equal("wolf", content.ResolveCreature("wolf").Code);
+        Assert.Equal("human-commoner", content.ResolveNpc("human-commoner").Code);
         Assert.Equal("travel-ration", content.ResolveItem("travel-ration").Code);
         Assert.Equal("forest", content.ResolveBiome("forest").Code);
         Assert.Equal("movement", content.ResolveRule("movement").Code);
+        Assert.Equal(4m, content.ResolveRule("survival").Parameters["hunger-per-hour"]);
+        Assert.Contains(content.Resources, value => value.Code == "food");
         Assert.Equal("brave", content.Resolve("brave").Code);
         Assert.IsAssignableFrom<IWorldDefinitionCatalog>(content);
         Assert.IsAssignableFrom<ITraitDefinitionCatalog>(content);

@@ -8,6 +8,7 @@ public sealed class RpgContentOverlayCatalog : IRpgContentCatalog
 {
     private readonly WorldDefinitionCatalog _world;
     private readonly ITraitDefinitionCatalog _traits;
+    private readonly IReadOnlyDictionary<string, NpcDefinition> _npcs;
     private readonly IReadOnlyDictionary<string, CreatureDefinition> _creatures;
     private readonly IReadOnlyDictionary<string, ItemDefinition> _items;
     private readonly IReadOnlyDictionary<string, RuleDefinition> _rules;
@@ -17,11 +18,13 @@ public sealed class RpgContentOverlayCatalog : IRpgContentCatalog
         IEnumerable<CreatureDefinition>? creatures = null,
         IEnumerable<ItemDefinition>? items = null,
         IEnumerable<BiomeDefinition>? biomes = null,
-        IEnumerable<RuleDefinition>? rules = null)
+        IEnumerable<RuleDefinition>? rules = null,
+        IEnumerable<NpcDefinition>? npcs = null)
     {
         ArgumentNullException.ThrowIfNull(moduleContent);
         Modules = moduleContent.Modules;
         _traits = moduleContent;
+        _npcs = Overlay(moduleContent.Npcs, npcs, value => value.Code);
         _creatures = Overlay(moduleContent.Creatures, creatures, value => value.Code);
         _items = Overlay(moduleContent.Items, items, value => value.Code);
         _rules = Overlay(moduleContent.Rules, rules, value => value.Code);
@@ -30,6 +33,7 @@ public sealed class RpgContentOverlayCatalog : IRpgContentCatalog
         Creatures = Values(_creatures);
         Items = Values(_items);
         Rules = Values(_rules);
+        Npcs = Values(_npcs);
     }
 
     public IReadOnlyCollection<RpgModuleMetadata> Modules { get; }
@@ -37,6 +41,7 @@ public sealed class RpgContentOverlayCatalog : IRpgContentCatalog
     public IReadOnlyCollection<BiomeDefinition> Biomes => _world.Biomes;
     public IReadOnlyCollection<ResourceDefinition> Resources => _world.Resources;
     public IReadOnlyCollection<TraitDefinition> Traits => _traits.Traits;
+    public IReadOnlyCollection<NpcDefinition> Npcs { get; }
     public IReadOnlyCollection<CreatureDefinition> Creatures { get; }
     public IReadOnlyCollection<ItemDefinition> Items { get; }
     public IReadOnlyCollection<RuleDefinition> Rules { get; }
@@ -48,6 +53,7 @@ public sealed class RpgContentOverlayCatalog : IRpgContentCatalog
     public bool TryResolveResource(string code, out ResourceDefinition? value) => _world.TryResolveResource(code, out value);
     public TraitDefinition Resolve(string code) => _traits.Resolve(code);
     public bool TryResolve(string code, out TraitDefinition? value) => _traits.TryResolve(code, out value);
+    public NpcDefinition ResolveNpc(string code) => Resolve(_npcs, code, "NPC");
     public CreatureDefinition ResolveCreature(string code) => Resolve(_creatures, code, "Creature");
     public ItemDefinition ResolveItem(string code) => Resolve(_items, code, "Item");
     public RuleDefinition ResolveRule(string code) => Resolve(_rules, code, "Rule");

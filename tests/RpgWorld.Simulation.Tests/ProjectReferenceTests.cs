@@ -20,5 +20,6 @@ public sealed class ProjectReferenceTests
 
         Assert.DoesNotContain("RpgWorld.Api", references);
         Assert.DoesNotContain("RpgWorld.Web", references);
+        Assert.DoesNotContain("RpgWorld.Modules.Default", references);
     }
 }
