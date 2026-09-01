@@ -1,4 +1,5 @@
 export interface PlayerWorldView {
+  readonly playerActorId: string;
   readonly worldId: string;
   readonly worldName: string;
   readonly characterName: string;

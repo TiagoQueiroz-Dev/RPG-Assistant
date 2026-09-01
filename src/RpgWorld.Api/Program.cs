@@ -77,6 +77,7 @@ builder.Services.AddSingleton<
 builder.Services.AddSingleton<IWorldUpdatePublisher, SignalRWorldUpdatePublisher>();
 builder.Services.AddSingleton<DemoWorldMapProvider>();
 builder.Services.AddScoped<PersistedWorldMapProvider>();
+builder.Services.AddScoped<PlayerWorldMapProvider>();
 builder.Services.Configure<FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = WorldImportService.MaximumFileSize + (128 * 1024);
@@ -97,12 +98,29 @@ app.MapGet("/api/worlds/demo/map", (DemoWorldMapProvider provider) =>
 
 app.MapGet(
         "/api/worlds/{worldId:guid}/map",
-        async (Guid worldId, PersistedWorldMapProvider provider, CancellationToken cancellationToken) =>
+        async (HttpContext httpContext, Guid worldId, PersistedWorldMapProvider provider, CancellationToken cancellationToken) =>
         {
+            if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
             var map = await provider.GetMapAsync(worldId, cancellationToken);
             return map is null ? Results.NotFound() : Results.Ok(map);
         })
     .WithName("GetPersistedWorldMap");
+
+app.MapGet(
+        "/api/worlds/{worldId:guid}/players/{playerActorId:guid}/map",
+        async (HttpContext httpContext, Guid worldId, Guid playerActorId,
+            PlayerWorldMapProvider provider, CancellationToken cancellationToken) =>
+        {
+            if (!PlayerWorldAuthorization.HasContext(httpContext.User, worldId, playerActorId))
+                return Results.StatusCode(403);
+            try
+            {
+                var map = await provider.GetMapAsync(worldId, playerActorId, cancellationToken);
+                return map is null ? Results.NotFound() : Results.Ok(map);
+            }
+            catch (KeyNotFoundException) { return Results.NotFound(); }
+        })
+    .WithName("GetPlayerWorldMap");
 
 app.MapPost(
     "/api/actors/{actorId:guid}/move",
@@ -121,8 +139,9 @@ app.MapPost(
 
 app.MapGet(
     "/api/worlds/{worldId:guid}/actors",
-    async (Guid worldId, int x, int y, INpcInspectorService service, CancellationToken cancellationToken) =>
+    async (HttpContext httpContext, Guid worldId, int x, int y, INpcInspectorService service, CancellationToken cancellationToken) =>
     {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
         try { return Results.Ok(await service.ListAtPositionAsync(worldId, x, y, cancellationToken)); }
         catch (ArgumentOutOfRangeException exception)
         { return Results.BadRequest(new { error = exception.Message }); }
@@ -130,22 +149,32 @@ app.MapGet(
 
 app.MapGet(
     "/api/actors/{actorId:guid}/inspector",
-    async (Guid actorId, INpcInspectorService service, CancellationToken cancellationToken) =>
-        await service.GetNpcAsync(actorId, cancellationToken) is { } npc
+    async (HttpContext httpContext, Guid actorId, INpcInspectorService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasAnyContext(httpContext.User)) return Results.StatusCode(403);
+        if (await service.GetNpcAsync(actorId, cancellationToken) is not { } npc) return Results.NotFound();
+        return GameMasterWorldAuthorization.HasContext(httpContext.User, npc.WorldId)
             ? Results.Ok(npc)
-            : Results.NotFound());
+            : Results.StatusCode(403);
+    });
 
 app.MapGet(
     "/api/worlds/{worldId:guid}/cities",
-    async (Guid worldId, ICityService service, CancellationToken cancellationToken) =>
-        Results.Ok(await service.ListByWorldAsync(worldId, cancellationToken)));
+    async (HttpContext httpContext, Guid worldId, ICityService service, CancellationToken cancellationToken) =>
+        GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)
+            ? Results.Ok(await service.ListByWorldAsync(worldId, cancellationToken))
+            : Results.StatusCode(403));
 
 app.MapGet(
     "/api/cities/{cityId:guid}",
-    async (Guid cityId, ICityService service, CancellationToken cancellationToken) =>
-        await service.GetAsync(cityId, cancellationToken) is { } city
+    async (HttpContext httpContext, Guid cityId, ICityService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasAnyContext(httpContext.User)) return Results.StatusCode(403);
+        if (await service.GetAsync(cityId, cancellationToken) is not { } city) return Results.NotFound();
+        return GameMasterWorldAuthorization.HasContext(httpContext.User, city.WorldId)
             ? Results.Ok(city)
-            : Results.NotFound());
+            : Results.StatusCode(403);
+    });
 
 app.MapPost(
     "/api/worlds/{worldId:guid}/cities",
@@ -175,8 +204,10 @@ app.MapPost(
 
 app.MapGet(
     "/api/worlds/{worldId:guid}/factions",
-    async (Guid worldId, IFactionService service, CancellationToken cancellationToken) =>
-        Results.Ok(await service.ListByWorldAsync(worldId, cancellationToken)));
+    async (HttpContext httpContext, Guid worldId, IFactionService service, CancellationToken cancellationToken) =>
+        GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)
+            ? Results.Ok(await service.ListByWorldAsync(worldId, cancellationToken))
+            : Results.StatusCode(403));
 
 app.MapGet(
     "/api/worlds/{worldId:guid}/events",
@@ -276,10 +307,14 @@ app.MapPost(
 
 app.MapGet(
     "/api/factions/{factionId:guid}",
-    async (Guid factionId, IFactionService service, CancellationToken cancellationToken) =>
-        await service.GetAsync(factionId, cancellationToken) is { } faction
+    async (HttpContext httpContext, Guid factionId, IFactionService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasAnyContext(httpContext.User)) return Results.StatusCode(403);
+        if (await service.GetAsync(factionId, cancellationToken) is not { } faction) return Results.NotFound();
+        return GameMasterWorldAuthorization.HasContext(httpContext.User, faction.WorldId)
             ? Results.Ok(faction)
-            : Results.NotFound());
+            : Results.StatusCode(403);
+    });
 
 app.MapPost(
     "/api/worlds/{worldId:guid}/factions",

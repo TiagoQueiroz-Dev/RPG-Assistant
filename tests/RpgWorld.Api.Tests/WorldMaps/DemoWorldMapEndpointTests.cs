@@ -88,6 +88,14 @@ public sealed class DemoWorldMapEndpointTests
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/events?page=1&pageSize=20"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/admin?entityType=chunks&page=1&pageSize=20"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/map/layers/Population"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/map"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/map"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/actors?x=0&y=0"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/cities"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/factions"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/actors/{Guid.NewGuid()}/inspector"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/cities/{Guid.NewGuid()}"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/factions/{Guid.NewGuid()}"),
             JsonRequest(HttpMethod.Post, $"/api/worlds/{worldId}/admin/commands", new
             {
                 action = "CreateEvent",
@@ -215,8 +223,10 @@ public sealed class DemoWorldMapEndpointTests
     {
         using var factory = new MapWebApplicationFactory();
         using var client = factory.CreateClient();
-        var worldId = Guid.NewGuid();
-        var actorId = factory.Services.GetRequiredService<RecordingNpcInspectorService>().ActorId;
+        var inspectorService = factory.Services.GetRequiredService<RecordingNpcInspectorService>();
+        var worldId = inspectorService.WorldId;
+        var actorId = inspectorService.ActorId;
+        client.DefaultRequestHeaders.Add("X-Test-Game-Master-World", worldId.ToString());
 
         var actors = await client.GetFromJsonAsync<ActorAtPositionView[]>(
             $"/api/worlds/{worldId}/actors?x=4&y=6");
@@ -351,6 +361,7 @@ public sealed class DemoWorldMapEndpointTests
     private sealed class RecordingNpcInspectorService : INpcInspectorService
     {
         public Guid ActorId { get; } = Guid.NewGuid();
+        public Guid WorldId { get; } = Guid.NewGuid();
         public (Guid WorldId, int X, int Y)? LastPosition { get; private set; }
 
         public Task<IReadOnlyList<ActorAtPositionView>> ListAtPositionAsync(
@@ -370,7 +381,7 @@ public sealed class DemoWorldMapEndpointTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<NpcInspectorView?>(actorId != ActorId ? null : new NpcInspectorView(
                 ActorId,
-                Guid.NewGuid(),
+                WorldId,
                 "Brave NPC",
                 4,
                 6,

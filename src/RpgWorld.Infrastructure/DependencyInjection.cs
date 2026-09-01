@@ -25,6 +25,8 @@ using RpgWorld.Application.Worlds.Factions;
 using RpgWorld.Application.Worlds.Events;
 using RpgWorld.Application.Worlds.Admin;
 using RpgWorld.Infrastructure.Worlds.Admin;
+using RpgWorld.Application.Worlds.Visibility;
+using RpgWorld.Infrastructure.Worlds.Visibility;
 
 namespace RpgWorld.Infrastructure;
 
@@ -91,6 +93,9 @@ public static class DependencyInjection
         services.AddScoped<IWorldMapLayerRepository, EfWorldMapLayerRepository>();
         services.AddScoped<IWorldMapLayerService, WorldMapLayerService>();
         services.AddScoped<IGameMasterCommandService, GameMasterCommandService>();
+        services.AddScoped<IPlayerVisibilityService, PlayerVisibilityService>();
+        services.AddScoped<IDomainEventHandler<ActorCreatedEvent>, PlayerVisibilityCreatedEventHandler>();
+        services.AddScoped<IDomainEventHandler<ActorMovedEvent>, PlayerVisibilityMovedEventHandler>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();
         effectiveNpcMemoryOptions.Validate();
         services.AddSingleton(effectiveNpcMemoryOptions);

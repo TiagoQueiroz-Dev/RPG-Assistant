@@ -68,8 +68,12 @@ public sealed class WorldHubTests
     {
         var worldId = Guid.NewGuid();
         var otherWorldId = Guid.NewGuid();
+        var playerActorId = Guid.NewGuid();
         var identity = new ClaimsIdentity(
-            [new Claim(RealtimeClaimTypes.World, worldId.ToString())],
+            [
+                new Claim(RealtimeClaimTypes.World, worldId.ToString()),
+                new Claim(RealtimeClaimTypes.PlayerActor, playerActorId.ToString())
+            ],
             authenticationType: "test");
         var user = new ClaimsPrincipal(identity);
         var authorizer = new ClaimBasedRealtimeSubscriptionAuthorizer();
@@ -83,6 +87,9 @@ public sealed class WorldHubTests
         Assert.False(await authorizer.CanSubscribeAsync(
             user,
             new RealtimeSubscription(RealtimeAudience.GameMaster, worldId)));
+        Assert.True(await authorizer.CanSubscribeAsync(
+            user,
+            new RealtimeSubscription(RealtimeAudience.Player, playerActorId)));
     }
 
     private sealed class RealtimeWebApplicationFactory : WebApplicationFactory<Program>

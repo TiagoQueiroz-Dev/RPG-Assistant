@@ -5,5 +5,5 @@ public static class RealtimeClaimTypes
     public const string World = "rpg:world";
     public const string Chunk = "rpg:chunk";
     public const string GameMasterWorld = "rpg:gm-world";
+    public const string PlayerActor = "rpg:player-actor";
 }
-

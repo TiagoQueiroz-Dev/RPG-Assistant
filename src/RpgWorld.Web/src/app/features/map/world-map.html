@@ -11,11 +11,13 @@
       <button type="button" class="fit-button" (click)="resetView()">Enquadrar</button>
     </div>
   </header>
+  @if (audience() === 'game-master') {
   <nav class="layer-controls" aria-label="Modos de visualizaÃ§Ã£o do mapa">
     @for (mode of layerModes; track mode) {
       <button type="button" [class.active]="layerMode() === mode" (click)="selectLayer(mode)">{{ mode }}</button>
     }
   </nav>
+  }
 
   <div class="map-viewport">
     <canvas
@@ -42,6 +44,7 @@
       @if (selectedTile(); as tile) {
         <strong>{{ tile.biomeCode }}</strong>
         <span>X {{ tile.x }} · Y {{ tile.y }} · {{ tile.elevation }} m</span>
+        @if (tile.knowledgeState) { <span>Conhecimento: {{ tile.knowledgeState }}</span> }
         <span>{{ tile.classificationOrigin }}
           @if (tile.classificationConfidence !== null) {
             · {{ tile.classificationConfidence * 100 | number: '1.0-0' }}%

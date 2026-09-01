@@ -90,6 +90,8 @@ public sealed class ActorMovementService(
         await publisher.PublishToChunkAsync(originChunk.Id, message, cancellationToken);
         if (destinationChunk.Id != originChunk.Id)
             await publisher.PublishToChunkAsync(destinationChunk.Id, message, cancellationToken);
+        if (string.Equals(actor.Kind, "player", StringComparison.Ordinal))
+            await publisher.PublishToPlayerAsync(actor.Id, message, cancellationToken);
         await publisher.PublishToGameMasterAsync(message, cancellationToken);
         return result;
     }

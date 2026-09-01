@@ -23,4 +23,13 @@ describe('WorldMapService', () => {
       'worlds/world-id/map/layers/Population?minX=0&minY=0&maxX=31&maxY=15',
     );
   });
+
+  it('loads the sanitized player map from its isolated endpoint', () => {
+    const api = { get: vi.fn(() => of({})) };
+    TestBed.configureTestingModule({ providers: [{ provide: ApiClient, useValue: api }] });
+
+    TestBed.inject(WorldMapService).loadPlayer('world id', 'player id').subscribe();
+
+    expect(api.get).toHaveBeenCalledWith('worlds/world%20id/players/player%20id/map');
+  });
 });

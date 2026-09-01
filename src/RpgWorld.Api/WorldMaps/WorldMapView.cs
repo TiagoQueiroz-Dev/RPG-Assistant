@@ -31,4 +31,5 @@ public sealed record WorldMapTileView(
     decimal? ResourceQuantity = null,
     bool ResourceExhausted = false,
     Guid? CityId = null,
-    string? CityName = null);
+    string? CityName = null,
+    string? KnowledgeState = null);

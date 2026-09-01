@@ -51,6 +51,7 @@ public sealed class ActorMovementServiceTests
         Assert.Equal((actor.Id, result.Origin, result.Destination), activation.LastMovement);
         Assert.Equal([result.OriginChunkId, result.DestinationChunkId], publisher.ChunkIds);
         Assert.Equal("actor.moved", Assert.Single(publisher.GameMasterMessages).UpdateType);
+        Assert.Equal(kind == "player" ? [actor.Id] : [], publisher.PlayerIds);
         Assert.All(publisher.Messages, message => Assert.Equal("actor.moved", message.UpdateType));
         var moved = Assert.IsType<ActorMovedEvent>(Assert.Single(actor.DomainEvents));
         Assert.Equal(result.Destination, moved.Destination);
@@ -172,10 +173,12 @@ public sealed class ActorMovementServiceTests
         public List<Guid> ChunkIds { get; } = [];
         public List<WorldUpdateMessage> Messages { get; } = [];
         public List<WorldUpdateMessage> GameMasterMessages { get; } = [];
+        public List<Guid> PlayerIds { get; } = [];
         public Task PublishToChunkAsync(Guid chunkId, WorldUpdateMessage message, CancellationToken cancellationToken = default)
         { ChunkIds.Add(chunkId); Messages.Add(message); return Task.CompletedTask; }
         public Task PublishToWorldAsync(WorldUpdateMessage message, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task PublishToPlayerAsync(Guid playerId, WorldUpdateMessage message, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task PublishToPlayerAsync(Guid playerId, WorldUpdateMessage message, CancellationToken cancellationToken = default)
+        { PlayerIds.Add(playerId); return Task.CompletedTask; }
         public Task PublishToGameMasterAsync(WorldUpdateMessage message, CancellationToken cancellationToken = default)
         { GameMasterMessages.Add(message); return Task.CompletedTask; }
     }

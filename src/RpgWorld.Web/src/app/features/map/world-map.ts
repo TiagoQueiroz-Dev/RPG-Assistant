@@ -54,6 +54,8 @@ const BIOME_COLORS: Readonly<Record<string, string>> = {
 })
 export class WorldMap {
   readonly worldId = input('demo');
+  readonly audience = input<'game-master' | 'player'>('game-master');
+  readonly playerActorId = input<string | null>(null);
   readonly overlays = input<readonly WorldMapOverlay[]>([]);
   readonly refreshToken = input(0);
   readonly tileSelected = output<WorldMapTileView>();
@@ -87,7 +89,14 @@ export class WorldMap {
   protected readonly hoveredPosition = signal<{ x: number; y: number } | null>(null);
   protected readonly zoomPercent = computed(() => Math.round(this.transform().scale * 100));
   protected readonly legend = computed(() => this.layer()?.legend.map(item => ({ code: item.label, color: item.color }))
-    ?? Object.entries(BIOME_COLORS).map(([code, color]) => ({ code, color })));
+    ?? (this.audience() === 'player'
+      ? [
+          { code: 'Visible', color: '#5ba7a0' },
+          { code: 'Known', color: '#596867' },
+          { code: 'Discovered', color: '#303c3d' },
+          { code: 'Unknown', color: '#101718' },
+        ]
+      : Object.entries(BIOME_COLORS).map(([code, color]) => ({ code, color }))));
 
   constructor() {
     afterNextRender(() => this.initializeCanvas());
@@ -248,7 +257,16 @@ export class WorldMap {
     this.loading.set(true);
     this.error.set(null);
 
-    this.mapSubscription = this.mapService.load(worldId).subscribe({
+    const playerActorId = this.playerActorId();
+    if (this.audience() === 'player' && !playerActorId) {
+      this.loading.set(false);
+      this.error.set('O personagem autenticado é necessário para carregar este mapa.');
+      return;
+    }
+    const request = this.audience() === 'player'
+      ? this.mapService.loadPlayer(worldId, playerActorId!)
+      : this.mapService.load(worldId);
+    this.mapSubscription = request.subscribe({
       next: map => {
         this.map.set(map);
         this.tileIndex.clear();
@@ -260,7 +278,8 @@ export class WorldMap {
         }
 
         this.loading.set(false);
-        this.loadLayer(map);
+        if (this.audience() === 'game-master') this.loadLayer(map);
+        else this.layer.set(null);
         if (preserveViewport) this.scheduleDraw();
         else this.fitMap();
       },
@@ -410,6 +429,12 @@ export class WorldMap {
             markerSize,
             markerSize,
           );
+        }
+        if (tile.knowledgeState === 'Known' || tile.knowledgeState === 'Discovered') {
+          context.fillStyle = tile.knowledgeState === 'Known'
+            ? 'rgba(8, 14, 15, 0.34)'
+            : 'rgba(8, 14, 15, 0.62)';
+          context.fillRect(screen.x, screen.y, renderedTileSize + 0.5, renderedTileSize + 0.5);
         }
       }
 

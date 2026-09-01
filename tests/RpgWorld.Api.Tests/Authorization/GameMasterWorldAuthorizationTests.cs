@@ -19,8 +19,10 @@ public sealed class GameMasterWorldAuthorizationTests
             "test"));
 
         Assert.True(GameMasterWorldAuthorization.HasContext(authorized, worldId));
+        Assert.True(GameMasterWorldAuthorization.HasAnyContext(authorized));
         Assert.False(GameMasterWorldAuthorization.HasContext(wrongWorld, worldId));
         Assert.False(GameMasterWorldAuthorization.HasContext(new ClaimsPrincipal(), worldId));
         Assert.False(GameMasterWorldAuthorization.HasContext(null, worldId));
+        Assert.False(GameMasterWorldAuthorization.HasAnyContext(new ClaimsPrincipal()));
     }
 }

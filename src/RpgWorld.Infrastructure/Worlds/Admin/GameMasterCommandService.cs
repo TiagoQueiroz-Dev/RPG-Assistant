@@ -88,6 +88,8 @@ public sealed class GameMasterCommandService(
             });
         await publisher.PublishToWorldAsync(message, cancellationToken);
         await publisher.PublishToGameMasterAsync(message, cancellationToken);
+        if (outcome.PlayerActorId is { } playerActorId)
+            await publisher.PublishToPlayerAsync(playerActorId, message, cancellationToken);
         return result;
     }
 
@@ -131,7 +133,8 @@ public sealed class GameMasterCommandService(
         actor.Move(world, world.PositionAt(destination.X, destination.Y), instant);
         origin.RemoveOccupant(actor.Id);
         destination.AddOccupant(actor.Id);
-        return new Outcome(actor.Id, $"Actor '{actor.Name}' moved to {destination.X},{destination.Y}.");
+        return new Outcome(actor.Id, $"Actor '{actor.Name}' moved to {destination.X},{destination.Y}.",
+            actor is PlayerActor ? actor.Id : null);
     }
 
     private async Task<Outcome> CreateCityAsync(
@@ -325,5 +328,5 @@ public sealed class GameMasterCommandService(
     private static string Kebab(string value) => string.Concat(value.Select((character, index) =>
         char.IsUpper(character) && index > 0 ? $"-{char.ToLowerInvariant(character)}" : char.ToLowerInvariant(character).ToString()));
 
-    private sealed record Outcome(Guid? EntityId, string Summary);
+    private sealed record Outcome(Guid? EntityId, string Summary, Guid? PlayerActorId = null);
 }

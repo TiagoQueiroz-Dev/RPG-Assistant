@@ -11,6 +11,12 @@ export class WorldMapService {
     return this.api.get<WorldMapView>(`worlds/${encodeURIComponent(worldId)}/map`);
   }
 
+  loadPlayer(worldId: string, playerActorId: string): Observable<WorldMapView> {
+    return this.api.get<WorldMapView>(
+      `worlds/${encodeURIComponent(worldId)}/players/${encodeURIComponent(playerActorId)}/map`,
+    );
+  }
+
   loadLayer(worldId: string, mode: WorldMapLayerMode, width: number, height: number): Observable<WorldMapLayerView> {
     return this.api.get<WorldMapLayerView>(
       `worlds/${encodeURIComponent(worldId)}/map/layers/${mode}?minX=0&minY=0&maxX=${width - 1}&maxY=${height - 1}`,

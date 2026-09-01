@@ -45,6 +45,9 @@ using RpgWorld.Domain.Events;
 using RpgWorld.Application.Worlds.Admin;
 using RpgWorld.Application.Realtime;
 using RpgWorld.Infrastructure.Worlds.Admin;
+using RpgWorld.Application.Worlds.Visibility;
+using RpgWorld.Infrastructure.Worlds.Visibility;
+using RpgWorld.Api.WorldMaps;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -1397,6 +1400,73 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal("story.omen", storyEvent.Type);
         Assert.Equal(8, publisher.Messages.Count);
         Assert.All(publisher.Messages, value => Assert.Equal("game-master-command", value.UpdateType));
+    }
+
+    [Fact]
+    public async Task Player_fog_persists_history_and_never_serializes_unknown_tile_secrets()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        var now = new DateTimeOffset(2036, 2, 3, 4, 0, 0, TimeSpan.Zero);
+        Guid worldId;
+        Guid playerId;
+
+        await using (var context = new RpgWorldDbContext(options))
+        {
+            await context.Database.MigrateAsync();
+            var world = World.Create("Hidden world", 8, 8);
+            var chunk = world.CreateChunk(new ChunkCoordinate(0, 0));
+            var tiles = (from y in Enumerable.Range(0, 8)
+                from x in Enumerable.Range(0, 8)
+                select world.CreateTile(world.PositionAt(x, y), "forest", DefaultWorldDefinitions.Catalog, 0, 20m, 0.5m))
+                .ToArray();
+            var player = PlayerActor.Create("Explorer", world, world.PositionAt(2, 2), now);
+            tiles.Single(value => value.X == 2 && value.Y == 2).AddOccupant(player.Id);
+            var visibleTile = tiles.Single(value => value.X == 5 && value.Y == 5);
+            var secretTile = tiles.Single(value => value.X == 0 && value.Y == 7);
+            var visibleResource = ResourceDeposit.SpawnOnTile(
+                world, visibleTile, DefaultWorldDefinitions.Catalog.ResolveResource("wood"), now, initialQuantity: 30m);
+            var secretResource = ResourceDeposit.SpawnOnTile(
+                world, secretTile, DefaultWorldDefinitions.Catalog.ResolveResource("stone"), now, initialQuantity: 40m);
+            visibleResource.Discover(player.Id, now);
+            secretResource.Discover(player.Id, now);
+            var visibleCity = City.Create(world, "Seen City", visibleTile.Position, [visibleTile.Position], 10, 5m, now);
+            var secretCity = City.Create(world, "Secret City", secretTile.Position, [secretTile.Position], 10, 5m, now);
+            context.AddRange(world, chunk, player, visibleResource, secretResource, visibleCity, secretCity);
+            context.Tiles.AddRange(tiles);
+            await context.SaveChangesAsync();
+            context.ChangeTracker.Clear();
+            var visibility = new PlayerVisibilityService(context, new FixedTimeProvider(now));
+            await visibility.GetAsync(player.Id);
+            var trackedPlayer = await context.Actors.OfType<PlayerActor>().SingleAsync(value => value.Id == player.Id);
+            trackedPlayer.Move(world, world.PositionAt(5, 5), now.AddMinutes(1));
+            var movement = Assert.IsType<ActorMovedEvent>(Assert.Single(trackedPlayer.DomainEvents));
+            await context.SaveChangesAsync();
+            await new PlayerVisibilityMovedEventHandler(context, visibility).HandleAsync(movement);
+            var map = await new PlayerWorldMapProvider(context, visibility).GetMapAsync(world.Id, player.Id);
+
+            Assert.NotNull(map);
+            var exposed = map.Chunks.SelectMany(value => value.Tiles).ToArray();
+            Assert.DoesNotContain(exposed, value => value.X == 0 && value.Y == 7);
+            Assert.Equal("Known", exposed.Single(value => value.X == 2 && value.Y == 2).KnowledgeState);
+            Assert.Equal("Discovered", exposed.Single(value => value.X == 0 && value.Y == 0).KnowledgeState);
+            var currentlyVisible = exposed.Single(value => value.X == 5 && value.Y == 5);
+            Assert.Equal("Visible", currentlyVisible.KnowledgeState);
+            Assert.Equal("wood", currentlyVisible.ResourceCode);
+            Assert.Equal("Seen City", currentlyVisible.CityName);
+            Assert.DoesNotContain("Secret City", System.Text.Json.JsonSerializer.Serialize(map));
+            Assert.Equal(46, exposed.Length);
+            worldId = world.Id;
+            playerId = player.Id;
+        }
+
+        await using var restarted = new RpgWorldDbContext(options);
+        var restoredVisibility = await new PlayerVisibilityService(restarted, new FixedTimeProvider(now.AddMinutes(2)))
+            .GetAsync(playerId);
+        Assert.Equal(worldId, restoredVisibility.WorldId);
+        Assert.Equal("Known", restoredVisibility.Tiles.Single(value => value.X == 2 && value.Y == 2).State);
+        Assert.DoesNotContain(restoredVisibility.Tiles, value => value.X == 0 && value.Y == 7);
     }
 
     private static byte[] CreateImage(string format)

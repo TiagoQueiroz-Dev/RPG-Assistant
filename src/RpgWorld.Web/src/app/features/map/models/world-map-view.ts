@@ -32,6 +32,7 @@ export interface WorldMapTileView {
   readonly resourceExhausted: boolean;
   readonly cityId: string | null;
   readonly cityName: string | null;
+  readonly knowledgeState?: 'Discovered' | 'Known' | 'Visible' | null;
 }
 
 export interface WorldMapOverlay {

@@ -45,6 +45,7 @@ public sealed class RpgWorldDbContext : DbContext
     public DbSet<WorldClock> WorldClocks => Set<WorldClock>();
 
     public DbSet<Actor> Actors => Set<Actor>();
+    public DbSet<PlayerTileKnowledge> PlayerTileKnowledge => Set<PlayerTileKnowledge>();
     public DbSet<NpcMemory> NpcMemories => Set<NpcMemory>();
     public DbSet<HousingConstruction> HousingConstructions => Set<HousingConstruction>();
     public DbSet<ResourceDeposit> ResourceDeposits => Set<ResourceDeposit>();

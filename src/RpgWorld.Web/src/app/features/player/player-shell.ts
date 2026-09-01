@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnDestroy, signal } from '@angular/core';
 import { WorldMap } from '../map/world-map';
 import { PlayerWorldView } from './models/player-world-view';
+import { WorldRealtimeService } from '../../core/realtime/world-realtime.service';
 
 @Component({
   selector: 'app-player-shell',
@@ -9,8 +10,12 @@ import { PlayerWorldView } from './models/player-world-view';
   styleUrl: './player-shell.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class PlayerShell {
+export class PlayerShell implements OnDestroy {
+  private readonly realtime = inject(WorldRealtimeService);
+  private stopRealtimeUpdates?: () => void;
+  protected readonly visibilityRevision = signal(0);
   protected readonly view = signal<PlayerWorldView>({
+    playerActorId: '00000000-0000-4000-8000-000000000001',
     worldId: 'demo',
     worldName: 'As Marcas de Aster',
     characterName: 'Liora Venn',
@@ -40,4 +45,18 @@ export class PlayerShell {
       { regionId: 'white-woods', name: 'Bosque Branco', knowledge: 'discovered' },
     ],
   });
+
+  constructor() {
+    const playerId = this.view().playerActorId;
+    this.stopRealtimeUpdates = this.realtime.onWorldUpdated(message => {
+      if (message.worldId === this.view().worldId)
+        this.visibilityRevision.update(value => value + 1);
+    });
+    void this.realtime.joinPlayer(playerId).catch(() => undefined);
+  }
+
+  ngOnDestroy(): void {
+    this.stopRealtimeUpdates?.();
+    void this.realtime.leavePlayer(this.view().playerActorId);
+  }
 }

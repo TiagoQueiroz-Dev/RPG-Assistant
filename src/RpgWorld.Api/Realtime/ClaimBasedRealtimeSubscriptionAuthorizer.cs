@@ -27,7 +27,8 @@ public sealed class ClaimBasedRealtimeSubscriptionAuthorizer
                 HasIdentifierClaim(user, RealtimeClaimTypes.Chunk, subscription.TargetId),
             RealtimeAudience.Player =>
                 HasIdentifierClaim(user, ClaimTypes.NameIdentifier, subscription.TargetId) ||
-                HasIdentifierClaim(user, "sub", subscription.TargetId),
+                HasIdentifierClaim(user, "sub", subscription.TargetId) ||
+                HasIdentifierClaim(user, RealtimeClaimTypes.PlayerActor, subscription.TargetId),
             RealtimeAudience.GameMaster =>
                 HasIdentifierClaim(
                     user,
@@ -46,4 +47,3 @@ public sealed class ClaimBasedRealtimeSubscriptionAuthorizer
         user.FindAll(claimType).Any(claim =>
             Guid.TryParse(claim.Value, out var actual) && actual == expected);
 }
-
