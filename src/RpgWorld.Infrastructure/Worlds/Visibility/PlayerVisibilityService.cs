@@ -49,6 +49,20 @@ public sealed class PlayerVisibilityService(
             observedAtUtc,
             cancellationToken);
 
+    public async Task<IReadOnlyList<Guid>> ListPlayersSeeingAsync(
+        Guid worldId,
+        int x,
+        int y,
+        CancellationToken cancellationToken = default)
+    {
+        if (worldId == Guid.Empty) throw new ArgumentException("World identifier is required.", nameof(worldId));
+        var players = await dbContext.Actors.AsNoTracking().OfType<PlayerActor>()
+            .Where(value => value.WorldId == worldId && value.Status != ActorStatus.Dead)
+            .ToArrayAsync(cancellationToken);
+        return players.Where(player => IsVisible(player.X, player.Y, x, y, PerceptionRadius(player)))
+            .Select(player => player.Id).ToArray();
+    }
+
     private async Task RefreshPlayerAsync(
         PlayerActor player,
         DateTimeOffset observedAtUtc,

@@ -1425,6 +1425,14 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
             tiles.Single(value => value.X == 2 && value.Y == 2).AddOccupant(player.Id);
             var visibleTile = tiles.Single(value => value.X == 5 && value.Y == 5);
             var secretTile = tiles.Single(value => value.X == 0 && value.Y == 7);
+            var visibleNpc = NpcActor.Create("Visible NPC", world, world.PositionAt(6, 5), now);
+            var visibleCreature = CreatureActor.Create("Visible Creature", world, world.PositionAt(5, 6), now);
+            var visiblePlayer = PlayerActor.Create("Visible Player", world, world.PositionAt(3, 5), now);
+            var hiddenNpc = NpcActor.Create("Hidden NPC", world, secretTile.Position, now);
+            var visibleStructureId = Guid.NewGuid();
+            var secretStructureId = Guid.NewGuid();
+            tiles.Single(value => value.X == 6 && value.Y == 6).AssignStructure(visibleStructureId);
+            secretTile.AssignStructure(secretStructureId);
             var visibleResource = ResourceDeposit.SpawnOnTile(
                 world, visibleTile, DefaultWorldDefinitions.Catalog.ResolveResource("wood"), now, initialQuantity: 30m);
             var secretResource = ResourceDeposit.SpawnOnTile(
@@ -1433,7 +1441,12 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
             secretResource.Discover(player.Id, now);
             var visibleCity = City.Create(world, "Seen City", visibleTile.Position, [visibleTile.Position], 10, 5m, now);
             var secretCity = City.Create(world, "Secret City", secretTile.Position, [secretTile.Position], 10, 5m, now);
-            context.AddRange(world, chunk, player, visibleResource, secretResource, visibleCity, secretCity);
+            var visibleEvent = WorldEvent.Create(Guid.NewGuid(), world.Id, "story.visible", now,
+                new WorldEventPosition(5, 5), [visibleNpc.Id], "{\"secret\":\"safe\"}");
+            var hiddenEvent = WorldEvent.Create(Guid.NewGuid(), world.Id, "story.hidden", now,
+                new WorldEventPosition(0, 7), [hiddenNpc.Id], "{\"secret\":\"hidden\"}");
+            context.AddRange(world, chunk, player, visibleNpc, visibleCreature, visiblePlayer, hiddenNpc,
+                visibleResource, secretResource, visibleCity, secretCity, visibleEvent, hiddenEvent);
             context.Tiles.AddRange(tiles);
             await context.SaveChangesAsync();
             context.ChangeTracker.Clear();
@@ -1457,6 +1470,24 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
             Assert.Equal("Seen City", currentlyVisible.CityName);
             Assert.DoesNotContain("Secret City", System.Text.Json.JsonSerializer.Serialize(map));
             Assert.Equal(46, exposed.Length);
+            var playerView = await new PlayerWorldViewService(context, visibility).GetAsync(player.Id);
+            Assert.Equal(3, playerView.VisibleEntities.Count);
+            Assert.Contains(playerView.VisibleEntities, value => value.Kind == "npc" && value.Name == "Visible NPC");
+            Assert.Contains(playerView.VisibleEntities, value => value.Kind == "creature" && value.Name == "Visible Creature");
+            Assert.Contains(playerView.VisibleEntities, value => value.Kind == "player" && value.Name == "Visible Player");
+            Assert.DoesNotContain(playerView.VisibleEntities, value => value.Name == "Hidden NPC");
+            Assert.Contains(playerView.VisibleStructures, value => value.Id == visibleStructureId);
+            Assert.DoesNotContain(playerView.VisibleStructures, value => value.Id == secretStructureId);
+            Assert.Contains(playerView.RelevantEvents, value => value.Id == visibleEvent.Id);
+            Assert.DoesNotContain(playerView.RelevantEvents, value => value.Id == hiddenEvent.Id);
+            var serializedPlayerView = System.Text.Json.JsonSerializer.Serialize(playerView);
+            Assert.DoesNotContain("Hidden NPC", serializedPlayerView);
+            Assert.DoesNotContain("health", serializedPlayerView, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("payload", serializedPlayerView, StringComparison.OrdinalIgnoreCase);
+            var recipients = await visibility.ListPlayersSeeingAsync(world.Id, 5, 5);
+            Assert.Contains(player.Id, recipients);
+            Assert.Contains(visiblePlayer.Id, recipients);
+            Assert.DoesNotContain(hiddenNpc.Id, recipients);
             worldId = world.Id;
             playerId = player.Id;
         }

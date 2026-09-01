@@ -90,12 +90,14 @@ public sealed class DemoWorldMapEndpointTests
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/map/layers/Population"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/map"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/map"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/view"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/actors?x=0&y=0"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/cities"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/factions"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/actors/{Guid.NewGuid()}/inspector"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/cities/{Guid.NewGuid()}"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/factions/{Guid.NewGuid()}"),
+            JsonRequest(HttpMethod.Post, $"/api/actors/{Guid.NewGuid()}/move", new { destinationX = 1, destinationY = 1 }),
             JsonRequest(HttpMethod.Post, $"/api/worlds/{worldId}/admin/commands", new
             {
                 action = "CreateEvent",
@@ -202,11 +204,28 @@ public sealed class DemoWorldMapEndpointTests
     }
 
     [Fact]
+    public async Task Player_cannot_change_actor_identifier_to_read_another_world_view()
+    {
+        using var factory = new MapWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var worldId = Guid.NewGuid();
+        var playerActorId = Guid.NewGuid();
+        client.DefaultRequestHeaders.Add("X-Test-Player-World", worldId.ToString());
+        client.DefaultRequestHeaders.Add("X-Test-Player-Actor", playerActorId.ToString());
+
+        using var response = await client.GetAsync(
+            $"/api/worlds/{worldId}/players/{Guid.NewGuid()}/view");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Actor_move_endpoint_forwards_destination_to_shared_movement_service()
     {
         using var factory = new MapWebApplicationFactory();
         using var client = factory.CreateClient();
         var actorId = Guid.NewGuid();
+        client.DefaultRequestHeaders.Add("X-Test-Player-Actor", actorId.ToString());
 
         using var response = await client.PostAsJsonAsync(
             $"/api/actors/{actorId}/move",
@@ -287,12 +306,14 @@ public sealed class DemoWorldMapEndpointTests
         {
             app.Use(async (context, continuePipeline) =>
             {
+                var claims = new List<Claim>();
                 if (Guid.TryParse(context.Request.Headers["X-Test-Game-Master-World"], out var worldId))
-                {
-                    context.User = new ClaimsPrincipal(new ClaimsIdentity(
-                        [new Claim(RealtimeClaimTypes.GameMasterWorld, worldId.ToString())],
-                        "test"));
-                }
+                    claims.Add(new Claim(RealtimeClaimTypes.GameMasterWorld, worldId.ToString()));
+                if (Guid.TryParse(context.Request.Headers["X-Test-Player-Actor"], out var playerActorId))
+                    claims.Add(new Claim(RealtimeClaimTypes.PlayerActor, playerActorId.ToString()));
+                if (Guid.TryParse(context.Request.Headers["X-Test-Player-World"], out var playerWorldId))
+                    claims.Add(new Claim(RealtimeClaimTypes.World, playerWorldId.ToString()));
+                if (claims.Count > 0) context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
                 await continuePipeline();
             });
             next(app);

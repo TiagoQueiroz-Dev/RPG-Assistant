@@ -20,9 +20,11 @@ public sealed class PlayerWorldAuthorizationTests
         var master = Principal(new Claim(RealtimeClaimTypes.GameMasterWorld, worldId.ToString()));
 
         Assert.True(PlayerWorldAuthorization.HasContext(authorized, worldId, playerId));
+        Assert.True(PlayerWorldAuthorization.HasActorContext(authorized, playerId));
         Assert.True(PlayerWorldAuthorization.HasContext(master, worldId, playerId));
         Assert.False(PlayerWorldAuthorization.HasContext(wrongPlayer, worldId, playerId));
         Assert.False(PlayerWorldAuthorization.HasContext(new ClaimsPrincipal(), worldId, playerId));
+        Assert.False(PlayerWorldAuthorization.HasActorContext(wrongPlayer, playerId));
     }
 
     private static ClaimsPrincipal Principal(params Claim[] claims) =>

@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, inject, OnDestroy, signal } from '@
 import { WorldMap } from '../map/world-map';
 import { PlayerWorldView } from './models/player-world-view';
 import { WorldRealtimeService } from '../../core/realtime/world-realtime.service';
+import { PlayerWorldService } from './player-world.service';
+import { WorldMapOverlay } from '../map/models/world-map-view';
 
 @Component({
   selector: 'app-player-shell',
@@ -12,8 +14,10 @@ import { WorldRealtimeService } from '../../core/realtime/world-realtime.service
 })
 export class PlayerShell implements OnDestroy {
   private readonly realtime = inject(WorldRealtimeService);
+  private readonly playerWorld = inject(PlayerWorldService);
   private stopRealtimeUpdates?: () => void;
   protected readonly visibilityRevision = signal(0);
+  protected readonly visibleOverlays = signal<readonly WorldMapOverlay[]>([]);
   protected readonly view = signal<PlayerWorldView>({
     playerActorId: '00000000-0000-4000-8000-000000000001',
     worldId: 'demo',
@@ -49,14 +53,48 @@ export class PlayerShell implements OnDestroy {
   constructor() {
     const playerId = this.view().playerActorId;
     this.stopRealtimeUpdates = this.realtime.onWorldUpdated(message => {
-      if (message.worldId === this.view().worldId)
+      if (message.worldId === this.view().worldId) {
         this.visibilityRevision.update(value => value + 1);
+        this.loadVisibleWorld();
+      }
     });
     void this.realtime.joinPlayer(playerId).catch(() => undefined);
+    this.loadVisibleWorld();
   }
 
   ngOnDestroy(): void {
     this.stopRealtimeUpdates?.();
     void this.realtime.leavePlayer(this.view().playerActorId);
+  }
+
+  private loadVisibleWorld(): void {
+    const current = this.view();
+    if (!/^[0-9a-f-]{36}$/i.test(current.worldId)) return;
+    this.playerWorld.load(current.worldId, current.playerActorId).subscribe(server => {
+      this.view.update(view => ({
+        ...view,
+        worldName: server.worldName,
+        characterName: server.characterName,
+        currentLocation: {
+          ...view.currentLocation,
+          name: `X ${server.x} · Y ${server.y}`,
+          description: `Área visível em um raio de ${server.perceptionRadius} tiles.`,
+        },
+        nearbyEntities: server.visibleEntities.map(entity => ({
+          entityId: entity.id,
+          displayName: entity.name,
+          kind: entity.kind === 'creature' ? 'creature' : 'person',
+          distance: `${entity.distance} tile(s)`,
+        })),
+      }));
+      this.visibleOverlays.set([
+        ...server.visibleEntities.map(entity => ({
+          id: entity.id, x: entity.x, y: entity.y, kind: 'entity' as const, label: entity.name,
+        })),
+        ...server.visibleStructures.map(structure => ({
+          id: structure.id, x: structure.x, y: structure.y, kind: 'structure' as const, label: structure.kind,
+        })),
+      ]);
+    });
   }
 }

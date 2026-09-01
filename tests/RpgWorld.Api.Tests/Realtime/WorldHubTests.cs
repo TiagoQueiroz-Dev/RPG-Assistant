@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RpgWorld.Api.Realtime;
 using RpgWorld.Application.Realtime;
+using RpgWorld.Application.Worlds.Visibility;
 
 namespace RpgWorld.Api.Tests.Realtime;
 
@@ -50,7 +51,8 @@ public sealed class WorldHubTests
             DateTimeOffset.UtcNow,
             new Dictionary<string, string?> { ["cityId"] = Guid.NewGuid().ToString() });
 
-        var publisher = factory.Services.GetRequiredService<IWorldUpdatePublisher>();
+        using var scope = factory.Services.CreateScope();
+        var publisher = scope.ServiceProvider.GetRequiredService<IWorldUpdatePublisher>();
         await publisher.PublishToWorldAsync(message);
 
         var delivered = await received.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -64,32 +66,68 @@ public sealed class WorldHubTests
     }
 
     [Fact]
+    public async Task Positional_update_is_sent_only_to_players_selected_by_server_visibility()
+    {
+        using var factory = new RealtimeWebApplicationFactory();
+        var worldId = Guid.NewGuid();
+        var playerId = Guid.NewGuid();
+        factory.Services.GetRequiredService<RecordingVisibilityService>().Recipients = [playerId];
+        var received = new TaskCompletionSource<WorldUpdateMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var connection = new HubConnectionBuilder()
+            .WithUrl("http://localhost/hubs/world", options =>
+            {
+                options.Transports = HttpTransportType.LongPolling;
+                options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+            }).Build();
+        connection.On<WorldUpdateMessage>(nameof(IWorldHubClient.WorldUpdated), message => received.TrySetResult(message));
+        await connection.StartAsync();
+        await connection.InvokeAsync(nameof(WorldHub.JoinPlayer), playerId);
+        using var scope = factory.Services.CreateScope();
+        var publisher = scope.ServiceProvider.GetRequiredService<IWorldUpdatePublisher>();
+        var message = new WorldUpdateMessage(Guid.NewGuid(), worldId, "actor.moved", DateTimeOffset.UtcNow,
+            new Dictionary<string, string?> { ["actorId"] = Guid.NewGuid().ToString(), ["destinationX"] = "7", ["destinationY"] = "9" });
+
+        await publisher.PublishToGameMasterAsync(message);
+
+        Assert.Equal(message.MessageId, (await received.Task.WaitAsync(TimeSpan.FromSeconds(5))).MessageId);
+        Assert.Equal((worldId, 7, 9), factory.Services.GetRequiredService<RecordingVisibilityService>().LastQuery);
+    }
+
+    [Fact]
     public async Task Claim_authorizer_only_allows_claimed_audiences()
     {
         var worldId = Guid.NewGuid();
         var otherWorldId = Guid.NewGuid();
         var playerActorId = Guid.NewGuid();
-        var identity = new ClaimsIdentity(
+        var playerIdentity = new ClaimsIdentity(
             [
                 new Claim(RealtimeClaimTypes.World, worldId.ToString()),
                 new Claim(RealtimeClaimTypes.PlayerActor, playerActorId.ToString())
             ],
             authenticationType: "test");
-        var user = new ClaimsPrincipal(identity);
+        var player = new ClaimsPrincipal(playerIdentity);
+        var master = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(RealtimeClaimTypes.GameMasterWorld, worldId.ToString())], "test"));
         var authorizer = new ClaimBasedRealtimeSubscriptionAuthorizer();
 
-        Assert.True(await authorizer.CanSubscribeAsync(
-            user,
+        Assert.False(await authorizer.CanSubscribeAsync(
+            player,
             new RealtimeSubscription(RealtimeAudience.World, worldId)));
         Assert.False(await authorizer.CanSubscribeAsync(
-            user,
+            player,
             new RealtimeSubscription(RealtimeAudience.World, otherWorldId)));
         Assert.False(await authorizer.CanSubscribeAsync(
-            user,
+            player,
             new RealtimeSubscription(RealtimeAudience.GameMaster, worldId)));
         Assert.True(await authorizer.CanSubscribeAsync(
-            user,
+            player,
             new RealtimeSubscription(RealtimeAudience.Player, playerActorId)));
+        Assert.False(await authorizer.CanSubscribeAsync(
+            player,
+            new RealtimeSubscription(RealtimeAudience.Chunk, Guid.NewGuid())));
+        Assert.True(await authorizer.CanSubscribeAsync(
+            master,
+            new RealtimeSubscription(RealtimeAudience.World, worldId)));
     }
 
     private sealed class RealtimeWebApplicationFactory : WebApplicationFactory<Program>
@@ -110,6 +148,10 @@ public sealed class WorldHubTests
             {
                 services.RemoveAll<IRealtimeSubscriptionAuthorizer>();
                 services.AddSingleton<IRealtimeSubscriptionAuthorizer, AllowAllAuthorizer>();
+                services.RemoveAll<IPlayerVisibilityService>();
+                services.AddSingleton<RecordingVisibilityService>();
+                services.AddSingleton<IPlayerVisibilityService>(provider =>
+                    provider.GetRequiredService<RecordingVisibilityService>());
             });
         }
     }
@@ -121,5 +163,21 @@ public sealed class WorldHubTests
             RealtimeSubscription subscription,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
+    }
+
+    private sealed class RecordingVisibilityService : IPlayerVisibilityService
+    {
+        public IReadOnlyList<Guid> Recipients { get; set; } = [];
+        public (Guid WorldId, int X, int Y)? LastQuery { get; private set; }
+        public Task<PlayerVisibilityView> GetAsync(Guid playerActorId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+        public Task RefreshAsync(Guid playerActorId, DateTimeOffset observedAtUtc, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+        public Task<IReadOnlyList<Guid>> ListPlayersSeeingAsync(
+            Guid worldId, int x, int y, CancellationToken cancellationToken = default)
+        {
+            LastQuery = (worldId, x, y);
+            return Task.FromResult(Recipients);
+        }
     }
 }

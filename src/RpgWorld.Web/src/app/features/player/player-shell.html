@@ -12,7 +12,7 @@
   </aside>
 
   <app-world-map class="map-region" [worldId]="view().worldId" audience="player"
-    [playerActorId]="view().playerActorId" [refreshToken]="visibilityRevision()" />
+    [playerActorId]="view().playerActorId" [refreshToken]="visibilityRevision()" [overlays]="visibleOverlays()" />
 
   <div class="player-grid">
     <article class="panel nearby-panel">

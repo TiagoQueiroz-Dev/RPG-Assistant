@@ -20,4 +20,10 @@ public interface IPlayerVisibilityService
         Guid playerActorId,
         DateTimeOffset observedAtUtc,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<Guid>> ListPlayersSeeingAsync(
+        Guid worldId,
+        int x,
+        int y,
+        CancellationToken cancellationToken = default);
 }

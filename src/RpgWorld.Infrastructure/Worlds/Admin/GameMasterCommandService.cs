@@ -84,6 +84,9 @@ public sealed class GameMasterCommandService(
                 ["commandId"] = commandId.ToString(),
                 ["command"] = result.Command,
                 ["entityId"] = result.EntityId?.ToString(),
+                ["actorId"] = UpdateActorId(command, outcome)?.ToString(),
+                ["x"] = (outcome.X ?? command.X)?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["y"] = (outcome.Y ?? command.Y)?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["summary"] = result.Summary
             });
         await publisher.PublishToWorldAsync(message, cancellationToken);
@@ -104,7 +107,8 @@ public sealed class GameMasterCommandService(
             : NpcActor.Create(RequiredText(command.Name, "Actor name", 200), world, position, instant, maximumHealth);
         tile.AddOccupant(actor.Id);
         dbContext.Actors.Add(actor);
-        return new Outcome(actor.Id, $"{(creature ? "Creature" : "NPC")} '{actor.Name}' created at {actor.X},{actor.Y}.");
+        return new Outcome(actor.Id, $"{(creature ? "Creature" : "NPC")} '{actor.Name}' created at {actor.X},{actor.Y}.",
+            X: actor.X, Y: actor.Y);
     }
 
     private async Task<Outcome> DeleteNpcAsync(
@@ -118,7 +122,7 @@ public sealed class GameMasterCommandService(
         npc.TakeDamage(npc.Health, null, instant);
         var tile = await RequiredTileAsync(world, npc.X, npc.Y, token);
         tile.RemoveOccupant(npc.Id);
-        return new Outcome(npc.Id, $"NPC '{npc.Name}' removed from the active world.");
+        return new Outcome(npc.Id, $"NPC '{npc.Name}' removed from the active world.", X: npc.X, Y: npc.Y);
     }
 
     private async Task<Outcome> MoveActorAsync(
@@ -134,7 +138,7 @@ public sealed class GameMasterCommandService(
         origin.RemoveOccupant(actor.Id);
         destination.AddOccupant(actor.Id);
         return new Outcome(actor.Id, $"Actor '{actor.Name}' moved to {destination.X},{destination.Y}.",
-            actor is PlayerActor ? actor.Id : null);
+            actor is PlayerActor ? actor.Id : null, destination.X, destination.Y);
     }
 
     private async Task<Outcome> CreateCityAsync(
@@ -167,7 +171,7 @@ public sealed class GameMasterCommandService(
         var city = City.Create(world, RequiredText(command.Name, "City name", 200), world.PositionAt(centerX, centerY),
             positions, command.InitialPopulation ?? 0, command.InitialWealth ?? 0m, instant, command.FactionId);
         dbContext.Cities.Add(city);
-        return new Outcome(city.Id, $"City '{city.Name}' created.");
+        return new Outcome(city.Id, $"City '{city.Name}' created.", X: city.CenterX, Y: city.CenterY);
     }
 
     private async Task<Outcome> DestroyCityAsync(
@@ -180,7 +184,7 @@ public sealed class GameMasterCommandService(
         var residents = await dbContext.Actors.OfType<NpcActor>().Where(value => value.ResidentCityId == city.Id).ToArrayAsync(token);
         city.Destroy(RequiredText(command.Reason, "Destruction reason", 500), instant);
         foreach (var resident in residents) resident.LeaveCity(city.Id, instant);
-        return new Outcome(city.Id, $"City '{city.Name}' destroyed.");
+        return new Outcome(city.Id, $"City '{city.Name}' destroyed.", X: city.CenterX, Y: city.CenterY);
     }
 
     private async Task<Outcome> AdjustResourceAsync(
@@ -306,6 +310,9 @@ public sealed class GameMasterCommandService(
             outcome.EntityId is { } createdActorId ? [createdActorId] : [];
     }
 
+    private static Guid? UpdateActorId(GameMasterCommand command, Outcome outcome) => command.ActorId ??
+        (command.Type is GameMasterCommandType.CreateNpc or GameMasterCommandType.CreateCreature ? outcome.EntityId : null);
+
     private static int Required(int? value, string name) =>
         value ?? throw new ArgumentException($"{name} is required.");
 
@@ -328,5 +335,10 @@ public sealed class GameMasterCommandService(
     private static string Kebab(string value) => string.Concat(value.Select((character, index) =>
         char.IsUpper(character) && index > 0 ? $"-{char.ToLowerInvariant(character)}" : char.ToLowerInvariant(character).ToString()));
 
-    private sealed record Outcome(Guid? EntityId, string Summary, Guid? PlayerActorId = null);
+    private sealed record Outcome(
+        Guid? EntityId,
+        string Summary,
+        Guid? PlayerActorId = null,
+        int? X = null,
+        int? Y = null);
 }

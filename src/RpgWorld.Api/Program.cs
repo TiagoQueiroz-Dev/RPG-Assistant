@@ -24,6 +24,7 @@ using RpgWorld.Domain.Worlds.Factions;
 using RpgWorld.Simulation.Worlds.Factions;
 using RpgWorld.Application.Worlds.Events;
 using RpgWorld.Application.Worlds.Admin;
+using RpgWorld.Application.Worlds.Visibility;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -74,7 +75,7 @@ builder.Services.AddSignalR(options =>
 builder.Services.AddSingleton<
     IRealtimeSubscriptionAuthorizer,
     ClaimBasedRealtimeSubscriptionAuthorizer>();
-builder.Services.AddSingleton<IWorldUpdatePublisher, SignalRWorldUpdatePublisher>();
+builder.Services.AddScoped<IWorldUpdatePublisher, SignalRWorldUpdatePublisher>();
 builder.Services.AddSingleton<DemoWorldMapProvider>();
 builder.Services.AddScoped<PersistedWorldMapProvider>();
 builder.Services.AddScoped<PlayerWorldMapProvider>();
@@ -122,10 +123,28 @@ app.MapGet(
         })
     .WithName("GetPlayerWorldMap");
 
+app.MapGet(
+        "/api/worlds/{worldId:guid}/players/{playerActorId:guid}/view",
+        async (HttpContext httpContext, Guid worldId, Guid playerActorId,
+            IPlayerWorldViewService service, CancellationToken cancellationToken) =>
+        {
+            if (!PlayerWorldAuthorization.HasContext(httpContext.User, worldId, playerActorId))
+                return Results.StatusCode(403);
+            try
+            {
+                var view = await service.GetAsync(playerActorId, cancellationToken);
+                return view.WorldId == worldId ? Results.Ok(view) : Results.NotFound();
+            }
+            catch (KeyNotFoundException) { return Results.NotFound(); }
+        })
+    .WithName("GetPlayerWorldView");
+
 app.MapPost(
     "/api/actors/{actorId:guid}/move",
-    async (Guid actorId, ActorMoveApiRequest body, IActorMovementService service, CancellationToken cancellationToken) =>
+    async (HttpContext httpContext, Guid actorId, ActorMoveApiRequest body,
+        IActorMovementService service, CancellationToken cancellationToken) =>
     {
+        if (!PlayerWorldAuthorization.HasActorContext(httpContext.User, actorId)) return Results.StatusCode(403);
         try
         {
             return Results.Ok(await service.MoveAsync(

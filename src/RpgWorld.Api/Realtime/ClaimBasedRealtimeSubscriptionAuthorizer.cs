@@ -21,10 +21,9 @@ public sealed class ClaimBasedRealtimeSubscriptionAuthorizer
         var authorized = subscription.Audience switch
         {
             RealtimeAudience.World =>
-                HasIdentifierClaim(user, RealtimeClaimTypes.World, subscription.TargetId) ||
                 HasIdentifierClaim(user, RealtimeClaimTypes.GameMasterWorld, subscription.TargetId),
             RealtimeAudience.Chunk =>
-                HasIdentifierClaim(user, RealtimeClaimTypes.Chunk, subscription.TargetId),
+                false,
             RealtimeAudience.Player =>
                 HasIdentifierClaim(user, ClaimTypes.NameIdentifier, subscription.TargetId) ||
                 HasIdentifierClaim(user, "sub", subscription.TargetId) ||
