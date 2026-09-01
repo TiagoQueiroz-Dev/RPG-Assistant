@@ -6,6 +6,7 @@ using RpgWorld.Domain.Worlds;
 using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Simulation.Chunks;
 using RpgWorld.Simulation.Regions;
+using RpgWorld.Testing;
 
 namespace RpgWorld.Simulation.Tests.Chunks;
 
@@ -22,7 +23,7 @@ public sealed class ChunkActivationServiceTests
         var repository = InMemoryWorldMapRepository.Create(world);
         var cache = new RecordingCacheService();
         var dispatcher = new RecordingEventDispatcher();
-        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 8, 30, 12, 0, 0, TimeSpan.Zero));
+        var clock = new DeterministicTimeProvider(new DateTimeOffset(2026, 8, 30, 12, 0, 0, TimeSpan.Zero));
         var regionSimulation = new RecordingRegionSimulationService();
         using var service = new ChunkActivationService(
             repository,
@@ -55,7 +56,7 @@ public sealed class ChunkActivationServiceTests
         var repository = InMemoryWorldMapRepository.Create(world);
         var cache = new RecordingCacheService();
         var dispatcher = new RecordingEventDispatcher();
-        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 8, 30, 12, 0, 0, TimeSpan.Zero));
+        var clock = new DeterministicTimeProvider(new DateTimeOffset(2026, 8, 30, 12, 0, 0, TimeSpan.Zero));
         using var service = new ChunkActivationService(
             repository,
             cache,
@@ -106,7 +107,7 @@ public sealed class ChunkActivationServiceTests
         var registry = new ActiveChunkRegistry();
         var cache = new RecordingCacheService();
         var dispatcher = new RecordingEventDispatcher();
-        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var time = new DeterministicTimeProvider(DateTimeOffset.UnixEpoch);
         using var activationScope = new ChunkActivationService(
             repository,
             cache,
@@ -269,13 +270,6 @@ public sealed class ChunkActivationServiceTests
             Events.AddRange(domainEvents);
             return Task.CompletedTask;
         }
-    }
-
-    private sealed class ManualTimeProvider(DateTimeOffset utcNow) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => utcNow;
-
-        public void Advance(TimeSpan duration) => utcNow += duration;
     }
 
     private sealed class RecordingRegionSimulationService : IRegionSimulationService

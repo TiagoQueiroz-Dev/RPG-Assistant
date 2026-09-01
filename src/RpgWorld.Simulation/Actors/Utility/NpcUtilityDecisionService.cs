@@ -1,3 +1,5 @@
+using RpgWorld.Simulation.Engine;
+
 namespace RpgWorld.Simulation.Actors.Utility;
 
 public sealed class NpcUtilityDecisionService : INpcUtilityDecisionService
@@ -5,6 +7,7 @@ public sealed class NpcUtilityDecisionService : INpcUtilityDecisionService
     private readonly NpcAction[] _actions;
     private readonly INpcUtilityScoreModifier[] _modifiers;
     private readonly UtilityAiOptions _options;
+    private readonly ISimulationRandom? _random;
 
     public NpcUtilityDecisionService(IEnumerable<NpcAction> actions, UtilityAiOptions options)
         : this(actions, options, []) { }
@@ -13,6 +16,13 @@ public sealed class NpcUtilityDecisionService : INpcUtilityDecisionService
         IEnumerable<NpcAction> actions,
         UtilityAiOptions options,
         IEnumerable<INpcUtilityScoreModifier> modifiers)
+        : this(actions, options, modifiers, null) { }
+
+    public NpcUtilityDecisionService(
+        IEnumerable<NpcAction> actions,
+        UtilityAiOptions options,
+        IEnumerable<INpcUtilityScoreModifier> modifiers,
+        ISimulationRandom? random)
     {
         ArgumentNullException.ThrowIfNull(actions);
         _actions = actions.OrderBy(action => action.Code, StringComparer.Ordinal).ToArray();
@@ -23,20 +33,24 @@ public sealed class NpcUtilityDecisionService : INpcUtilityDecisionService
         _options.Validate();
         ArgumentNullException.ThrowIfNull(modifiers);
         _modifiers = modifiers.ToArray();
+        _random = random;
     }
 
     public NpcDecision? Decide(NpcDecisionContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
         var candidates = _actions.Select(action => Score(action, context)).ToArray();
-        var selected = candidates
+        var eligible = candidates
             .Where(candidate => candidate.IsEligible)
             .OrderByDescending(candidate => candidate.Score)
             .ThenBy(candidate => candidate.ActionCode, StringComparer.Ordinal)
-            .FirstOrDefault();
-        return selected is null
-            ? null
-            : new NpcDecision(context.Npc.Id, selected.ActionCode, selected.Score, candidates);
+            .ToArray();
+        if (eligible.Length == 0) return null;
+        var tied = eligible.TakeWhile(candidate => candidate.Score == eligible[0].Score).ToArray();
+        var selected = tied.Length == 1 || _random is null
+            ? tied[0]
+            : tied[_random.Next(tied.Length)];
+        return new NpcDecision(context.Npc.Id, selected.ActionCode, selected.Score, candidates);
     }
 
     private NpcActionScore Score(NpcAction action, NpcDecisionContext context)

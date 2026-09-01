@@ -3,6 +3,7 @@ using RpgWorld.Application.Worlds;
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Simulation.Engine;
 using RpgWorld.Simulation.Time;
+using RpgWorld.Testing;
 
 namespace RpgWorld.Simulation.Tests.Time;
 
@@ -104,7 +105,7 @@ public sealed class WorldTimeCommandServiceTests
                 Scheduler,
                 Runner,
                 Publisher,
-                new FixedTimeProvider());
+                new DeterministicTimeProvider(new DateTimeOffset(2026, 8, 30, 12, 0, 0, TimeSpan.Zero)));
         }
 
         public World World { get; }
@@ -184,8 +185,4 @@ public sealed class WorldTimeCommandServiceTests
         public Task ExecuteAsync(SimulationTickContext context, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => new(2026, 8, 30, 12, 0, 0, TimeSpan.Zero);
-    }
 }

@@ -8,6 +8,7 @@ using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Simulation.Actors;
 using RpgWorld.Simulation.Chunks;
 using RpgWorld.Simulation.Engine;
+using RpgWorld.Testing;
 using RpgWorld.Application.Worlds.Content;
 using RpgWorld.Modules.Abstractions;
 
@@ -133,7 +134,7 @@ public sealed class ActorMovementServiceTests
             activation ?? new RecordingChunkActivationService(),
             new WorldCommandGate(),
             publisher ?? new RecordingPublisher(),
-            new FixedTimeProvider(),
+            new DeterministicTimeProvider(new DateTimeOffset(2026, 8, 31, 0, 0, 0, TimeSpan.Zero)),
             campaignContent);
 
     private static Actor CreateActor(string kind, World world, Position position) => kind switch
@@ -227,8 +228,4 @@ public sealed class ActorMovementServiceTests
         { GameMasterMessages.Add(message); return Task.CompletedTask; }
     }
 
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => new(2026, 8, 31, 0, 0, 0, TimeSpan.Zero);
-    }
 }

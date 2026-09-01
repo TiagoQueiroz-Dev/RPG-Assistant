@@ -7,6 +7,7 @@ using RpgWorld.Simulation.Engine;
 using RpgWorld.Simulation.Time;
 using RpgWorld.Simulation;
 using RpgWorld.Simulation.Chunks;
+using RpgWorld.Testing;
 
 namespace RpgWorld.Simulation.Tests.Engine;
 
@@ -56,7 +57,7 @@ public sealed class SimulationEngineTests
     {
         var worldId = Guid.NewGuid();
         var calls = new List<string>();
-        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var time = new DeterministicTimeProvider(DateTimeOffset.UnixEpoch);
         await using var provider = CreateProvider(
             new FakeWorldSimulationRepository([worldId]),
             new RecordingClockService(),
@@ -179,7 +180,7 @@ public sealed class SimulationEngineTests
     public async Task Late_tick_and_slow_system_generate_structured_diagnostics()
     {
         var worldId = Guid.NewGuid();
-        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var time = new DeterministicTimeProvider(DateTimeOffset.UnixEpoch);
         var engineLogger = new RecordingLogger<SimulationEngine>();
         var runnerLogger = new RecordingLogger<SimulationSystemRunner>();
         await using var provider = CreateProvider(
@@ -288,7 +289,7 @@ public sealed class SimulationEngineTests
         TimeProvider? timeProvider = null,
         ILogger<SimulationSystemRunner>? runnerLogger = null)
     {
-        var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
+        var effectiveTimeProvider = timeProvider ?? new DeterministicTimeProvider(DateTimeOffset.UnixEpoch);
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
         var runner = new SimulationSystemRunner(
             scopeFactory,
@@ -453,7 +454,7 @@ public sealed class SimulationEngineTests
     }
 
     private sealed class AdvancingSystem(
-        ManualTimeProvider timeProvider,
+        DeterministicTimeProvider timeProvider,
         TimeSpan duration,
         int actorsProcessed) : ISimulationSystem
     {
@@ -466,24 +467,6 @@ public sealed class SimulationEngineTests
             context.RecordActorsProcessed(actorsProcessed);
             timeProvider.Advance(duration);
             return Task.CompletedTask;
-        }
-    }
-
-    private sealed class ManualTimeProvider(DateTimeOffset utcNow) : TimeProvider
-    {
-        private DateTimeOffset _utcNow = utcNow;
-        private long _timestamp;
-
-        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-
-        public override DateTimeOffset GetUtcNow() => _utcNow;
-
-        public override long GetTimestamp() => _timestamp;
-
-        public void Advance(TimeSpan duration)
-        {
-            _utcNow = _utcNow.Add(duration);
-            _timestamp += duration.Ticks;
         }
     }
 

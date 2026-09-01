@@ -1,6 +1,7 @@
 using RpgWorld.Domain.Actors;
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Simulation.Actors.Utility;
+using RpgWorld.Simulation.Engine;
 
 namespace RpgWorld.Simulation.Tests.Actors;
 
@@ -108,6 +109,26 @@ public sealed class NpcUtilityDecisionServiceTests
         Assert.Equal(0.75m, context.EnemyThreat);
     }
 
+    [Fact]
+    public void Fixed_seed_reproduces_utility_ai_tie_break_sequence()
+    {
+        var (npc, _) = CreateNpc();
+        var context = new NpcDecisionContext(npc, 0m, 1m, 0m, false, 0m);
+        var first = new NpcUtilityDecisionService(
+            [new ConstantAction("alpha"), new ConstantAction("beta")],
+            new UtilityAiOptions(), [], new SeededSimulationRandom(947));
+        var second = new NpcUtilityDecisionService(
+            [new ConstantAction("alpha"), new ConstantAction("beta")],
+            new UtilityAiOptions(), [], new SeededSimulationRandom(947));
+
+        var firstSequence = Enumerable.Range(0, 20).Select(_ => first.Decide(context)!.ActionCode).ToArray();
+        var secondSequence = Enumerable.Range(0, 20).Select(_ => second.Decide(context)!.ActionCode).ToArray();
+
+        Assert.Equal(firstSequence, secondSequence);
+        Assert.Contains("alpha", firstSequence);
+        Assert.Contains("beta", firstSequence);
+    }
+
     private static INpcUtilityDecisionService CreateService(UtilityAiOptions options) =>
         new NpcUtilityDecisionService(
             [
@@ -124,5 +145,12 @@ public sealed class NpcUtilityDecisionServiceTests
         var start = new DateTimeOffset(2026, 8, 31, 6, 0, 0, TimeSpan.Zero);
         var world = World.Create("Utility AI", 8, 8);
         return (NpcActor.Create("Villager", world, world.PositionAt(1, 1), start), start);
+    }
+
+    private sealed class ConstantAction(string code) : NpcAction(
+        code, new UtilityConsideration("constant", _ => 0.5m))
+    {
+        public override NpcActionEligibility CheckEligibility(NpcDecisionContext context) =>
+            NpcActionEligibility.Eligible;
     }
 }

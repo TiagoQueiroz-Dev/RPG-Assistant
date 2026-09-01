@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddSingleton<SimulationPerformanceMetrics>();
         services.AddSingleton<ISimulationPerformanceMetrics>(provider =>
             provider.GetRequiredService<SimulationPerformanceMetrics>());
+        services.TryAddSingleton<ISimulationRandom, SystemSimulationRandom>();
         services.AddSingleton<ISimulationScheduler, SimulationScheduler>();
         services.AddSingleton<IWorldCommandGate, WorldCommandGate>();
         services.AddSingleton<ISimulationSystemRunner, SimulationSystemRunner>();

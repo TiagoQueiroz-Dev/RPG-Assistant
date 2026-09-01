@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - run: dotnet restore RpgWorld.sln
+      - run: dotnet build RpgWorld.sln -c Release --no-restore
+      - name: Run isolated unit and API tests
+        shell: bash
+        run: |
+          dotnet test tests/RpgWorld.Domain.Tests/RpgWorld.Domain.Tests.csproj -c Release --no-build
+          dotnet test tests/RpgWorld.Application.Tests/RpgWorld.Application.Tests.csproj -c Release --no-build
+          dotnet test tests/RpgWorld.Simulation.Tests/RpgWorld.Simulation.Tests.csproj -c Release --no-build
+          dotnet test tests/RpgWorld.Api.Tests/RpgWorld.Api.Tests.csproj -c Release --no-build
+
+  deterministic-scenarios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - run: dotnet test tests/RpgWorld.Simulation.Scenarios/RpgWorld.Simulation.Scenarios.csproj -c Release
+
+  postgres-integration-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - run: dotnet test tests/RpgWorld.Infrastructure.Tests/RpgWorld.Infrastructure.Tests.csproj -c Release
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/RpgWorld.Web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/RpgWorld.Web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- --watch=false
+
+  simulation-benchmark-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Run deterministic benchmark scales
+        run: >-
+          dotnet run --project benchmarks/RpgWorld.Simulation.Benchmarks -c Release --
+          --counts 100,1000,5000 --warmup 1 --iterations 3
