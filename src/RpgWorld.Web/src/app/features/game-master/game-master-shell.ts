@@ -12,6 +12,10 @@ import { WorldAdminService, WorldInspectorEntity, WorldInspectorView } from './w
 import { WorldRealtimeService } from '../../core/realtime/world-realtime.service';
 import { GameMasterCommand, GameMasterCommandService, GameMasterCommandType } from './game-master-command.service';
 import { CustomContentDefinition, CustomContentKind, CustomContentService } from './custom-content.service';
+import {
+  CampaignSimulationSettings,
+  CampaignSimulationSettingsService,
+} from './campaign-simulation-settings.service';
 
 @Component({
   selector: 'app-game-master-shell',
@@ -30,6 +34,7 @@ export class GameMasterShell implements OnDestroy {
   private readonly realtime = inject(WorldRealtimeService);
   private readonly commands = inject(GameMasterCommandService);
   private readonly customContentService = inject(CustomContentService);
+  private readonly campaignSettingsService = inject(CampaignSimulationSettingsService);
   private stopRealtimeUpdates?: () => void;
   private realtimeRefresh?: ReturnType<typeof setTimeout>;
 
@@ -52,6 +57,9 @@ export class GameMasterShell implements OnDestroy {
   protected readonly customContent = signal<readonly CustomContentDefinition[]>([]);
   protected readonly editingContent = signal<CustomContentDefinition | null>(null);
   protected readonly customContentState = signal<'idle' | 'saving' | 'error'>('idle');
+  protected readonly campaignSettings = signal<CampaignSimulationSettings | null>(null);
+  protected readonly campaignSettingsState = signal<'idle' | 'loading' | 'saving' | 'error'>('idle');
+  protected readonly campaignSettingsMessage = signal('Valores efetivos usados pela simulação.');
   protected readonly customContentMessage = signal('Crie ou sobrescreva conteúdo apenas para esta campanha.');
 
   protected readonly world = signal<WorldAdminView>({
@@ -95,6 +103,7 @@ export class GameMasterShell implements OnDestroy {
         this.loadTimeline(result.worldId);
         this.loadInspector(result.worldId);
         this.loadCustomContent(result.worldId);
+        this.loadCampaignSettings(result.worldId);
         this.connectInspectorRealtime(result.worldId);
         this.importState.set('completed');
         this.importMessage.set(
@@ -319,6 +328,40 @@ export class GameMasterShell implements OnDestroy {
     });
   }
 
+  protected saveCampaignSettings(event: SubmitEvent): void {
+    event.preventDefault();
+    const worldId = this.world().worldId;
+    if (!this.isGuid(worldId)) {
+      this.campaignSettingsState.set('error');
+      this.campaignSettingsMessage.set('Importe ou abra um mundo persistido antes de configurar a simulação.');
+      return;
+    }
+    const data = new FormData(event.currentTarget as HTMLFormElement);
+    const number = (name: string) => Number(data.get(name));
+    this.campaignSettingsState.set('saving');
+    this.campaignSettingsMessage.set('Aplicando configurações…');
+    this.campaignSettingsService.update(worldId, {
+      npcDensity: number('npcDensity'),
+      creatureSpawnRate: number('creatureSpawnRate'),
+      warFrequency: number('warFrequency'),
+      economicDifficulty: number('economicDifficulty'),
+      resourceScarcity: number('resourceScarcity'),
+      migrationRate: number('migrationRate'),
+      populationGrowth: number('populationGrowth'),
+      simulationSpeed: number('simulationSpeed'),
+    }).subscribe({
+      next: settings => {
+        this.campaignSettings.set(settings);
+        this.campaignSettingsState.set('idle');
+        this.campaignSettingsMessage.set(`Configuração v${settings.version} aplicada e auditada.`);
+      },
+      error: error => {
+        this.campaignSettingsState.set('error');
+        this.campaignSettingsMessage.set(error?.error?.error ?? 'As configurações foram rejeitadas pelo servidor.');
+      },
+    });
+  }
+
   ngOnDestroy(): void {
     this.stopRealtimeUpdates?.();
     if (this.realtimeRefresh) clearTimeout(this.realtimeRefresh);
@@ -441,6 +484,22 @@ export class GameMasterShell implements OnDestroy {
       error: () => {
         this.customContent.set([]);
         this.customContentState.set('error');
+      },
+    });
+  }
+
+  private loadCampaignSettings(worldId: string): void {
+    if (!this.isGuid(worldId)) return;
+    this.campaignSettingsState.set('loading');
+    this.campaignSettingsService.get(worldId).subscribe({
+      next: settings => {
+        this.campaignSettings.set(settings);
+        this.campaignSettingsState.set('idle');
+      },
+      error: () => {
+        this.campaignSettings.set(null);
+        this.campaignSettingsState.set('error');
+        this.campaignSettingsMessage.set('Não foi possível consultar as configurações efetivas.');
       },
     });
   }

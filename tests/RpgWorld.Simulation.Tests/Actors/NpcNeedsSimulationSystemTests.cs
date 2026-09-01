@@ -1,4 +1,5 @@
 using RpgWorld.Application.Actors;
+using RpgWorld.Application.Worlds;
 using RpgWorld.Domain.Actors;
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Simulation.Actors;
@@ -38,6 +39,24 @@ public sealed class NpcNeedsSimulationSystemTests
         Assert.Equal(SimulationSystemFrequencies.Economy, system.Frequency);
     }
 
+    [Fact]
+    public async Task Npc_density_limits_detailed_population_processed_per_cycle()
+    {
+        var start = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Sparse", 8, 8);
+        var first = NpcActor.Create("First", world, world.PositionAt(1, 1), start);
+        var second = NpcActor.Create("Second", world, world.PositionAt(2, 2), start);
+        var repository = new FakeNpcNeedsRepository(first, second);
+        var system = new NpcNeedsSimulationSystem(repository, new FixedSettingsProvider(0.5m));
+        var instant = start.AddHours(1);
+
+        await system.ExecuteAsync(new SimulationTickContext(world.Id,
+            new WorldClockSnapshot(world.Id, instant, TimeSpan.FromHours(1), 1m, instant)));
+
+        Assert.Equal(instant, first.NeedsUpdatedAt);
+        Assert.Equal(start, second.NeedsUpdatedAt);
+    }
+
     private sealed class FakeNpcNeedsRepository(params NpcActor[] npcs) : INpcNeedsRepository
     {
         public IReadOnlyList<NpcActor> Npcs { get; } = npcs;
@@ -61,5 +80,13 @@ public sealed class NpcNeedsSimulationSystemTests
             SaveCalls++;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FixedSettingsProvider(decimal npcDensity) : ICampaignSimulationSettingsProvider
+    {
+        public Task<CampaignSimulationSettingsView> GetEffectiveAsync(
+            Guid worldId, CancellationToken cancellationToken = default) => Task.FromResult(
+            new CampaignSimulationSettingsView(worldId, npcDensity, 1m, 1m, 1m, 1m,
+                1m, 1m, 1m, 1, DateTimeOffset.UnixEpoch));
     }
 }

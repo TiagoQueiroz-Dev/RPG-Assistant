@@ -107,6 +107,55 @@
     </div>
   </article>
 
+  <article class="panel campaign-settings-panel" aria-labelledby="campaign-settings-title">
+    <header>
+      <div>
+        <span class="eyebrow">Regras da campanha</span>
+        <h2 id="campaign-settings-title">Configurações da simulação</h2>
+      </div>
+      <small [class.error]="campaignSettingsState() === 'error'" role="status">
+        {{ campaignSettingsMessage() }}
+      </small>
+    </header>
+    <form (submit)="saveCampaignSettings($event)">
+      <label>Densidade de NPCs
+        <input name="npcDensity" type="number" min="0.1" max="5" step="0.1" required
+          [value]="campaignSettings()?.npcDensity ?? 1" />
+      </label>
+      <label>Surgimento de criaturas
+        <input name="creatureSpawnRate" type="number" min="0" max="10" step="0.1" required
+          [value]="campaignSettings()?.creatureSpawnRate ?? 1" />
+      </label>
+      <label>Frequência de guerras
+        <input name="warFrequency" type="number" min="0" max="10" step="0.1" required
+          [value]="campaignSettings()?.warFrequency ?? 1" />
+      </label>
+      <label>Dificuldade econômica
+        <input name="economicDifficulty" type="number" min="0.1" max="5" step="0.1" required
+          [value]="campaignSettings()?.economicDifficulty ?? 1" />
+      </label>
+      <label>Escassez de recursos
+        <input name="resourceScarcity" type="number" min="0.1" max="10" step="0.1" required
+          [value]="campaignSettings()?.resourceScarcity ?? 1" />
+      </label>
+      <label>Taxa de migração
+        <input name="migrationRate" type="number" min="0" max="5" step="0.1" required
+          [value]="campaignSettings()?.migrationRate ?? 1" />
+      </label>
+      <label>Crescimento populacional
+        <input name="populationGrowth" type="number" min="0" max="5" step="0.1" required
+          [value]="campaignSettings()?.populationGrowth ?? 1" />
+      </label>
+      <label>Velocidade da simulação
+        <input name="simulationSpeed" type="number" min="0" max="100" step="0.1" required
+          [value]="campaignSettings()?.simulationSpeed ?? 1" />
+      </label>
+      <button type="submit" [disabled]="campaignSettingsState() === 'saving'">
+        Aplicar configurações
+      </button>
+    </form>
+  </article>
+
   <article class="panel custom-content-panel" aria-labelledby="custom-content-title">
     <header>
       <div>

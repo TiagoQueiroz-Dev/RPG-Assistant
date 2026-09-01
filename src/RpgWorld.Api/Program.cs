@@ -27,6 +27,7 @@ using RpgWorld.Application.Worlds.Admin;
 using RpgWorld.Application.Worlds.Visibility;
 using RpgWorld.Application.Worlds.Content;
 using RpgWorld.Domain.Worlds.Content;
+using RpgWorld.Application.Worlds;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -228,6 +229,33 @@ app.MapDelete(
             return Results.NoContent();
         }
         catch (KeyNotFoundException) { return Results.NotFound(); }
+    });
+
+app.MapGet(
+    "/api/worlds/{worldId:guid}/simulation/settings",
+    async (HttpContext httpContext, Guid worldId, ICampaignSimulationSettingsService service,
+        CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try { return Results.Ok(await service.GetEffectiveAsync(worldId, cancellationToken)); }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+    });
+
+app.MapPut(
+    "/api/worlds/{worldId:guid}/simulation/settings",
+    async (HttpContext httpContext, Guid worldId, CampaignSimulationSettingsApiRequest body,
+        ICampaignSimulationSettingsService service, CancellationToken cancellationToken) =>
+    {
+        if (!GameMasterWorldAuthorization.HasContext(httpContext.User, worldId)) return Results.StatusCode(403);
+        try
+        {
+            return Results.Ok(await service.UpdateAsync(worldId, new UpdateCampaignSimulationSettings(
+                body.NPCDensity, body.CreatureSpawnRate, body.WarFrequency, body.EconomicDifficulty,
+                body.ResourceScarcity, body.MigrationRate, body.PopulationGrowth, body.SimulationSpeed),
+                cancellationToken));
+        }
+        catch (KeyNotFoundException) { return Results.NotFound(); }
+        catch (ArgumentOutOfRangeException exception) { return Results.BadRequest(new { error = exception.Message }); }
     });
 
 app.MapPost(
@@ -914,6 +942,16 @@ record ActorMoveApiRequest(int DestinationX, int DestinationY);
 
 record CustomContentApiRequest(string Kind, string Code, string Name, JsonElement Payload);
 record UpdateCustomContentApiRequest(string Name, JsonElement Payload);
+
+record CampaignSimulationSettingsApiRequest(
+    decimal NPCDensity,
+    decimal CreatureSpawnRate,
+    decimal WarFrequency,
+    decimal EconomicDifficulty,
+    decimal ResourceScarcity,
+    decimal MigrationRate,
+    decimal PopulationGrowth,
+    decimal SimulationSpeed);
 
 record CityTerritoryApiPosition(int X, int Y);
 

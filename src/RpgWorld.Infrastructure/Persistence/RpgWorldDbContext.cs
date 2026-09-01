@@ -57,6 +57,7 @@ public sealed class RpgWorldDbContext : DbContext
     public DbSet<WorldEvent> WorldEvents => Set<WorldEvent>();
     public DbSet<WorldConsequence> WorldConsequences => Set<WorldConsequence>();
     public DbSet<CustomContentDefinition> CustomContentDefinitions => Set<CustomContentDefinition>();
+    public DbSet<CampaignSimulationSettings> CampaignSimulationSettings => Set<CampaignSimulationSettings>();
 
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 

@@ -199,8 +199,9 @@ public sealed class ResourceDeposit : AggregateRoot
         return new ResourceExtraction(Id, ResourceCode, extracted, consumer, IsExhausted);
     }
 
-    public decimal RegenerateTo(DateTimeOffset worldInstant)
+    public decimal RegenerateTo(DateTimeOffset worldInstant, decimal availabilityMultiplier = 1m)
     {
+        if (availabilityMultiplier <= 0m) throw new ArgumentOutOfRangeException(nameof(availabilityMultiplier));
         var instant = worldInstant.ToUniversalTime();
         if (instant < LastRegeneratedAtUtc)
             throw new ArgumentOutOfRangeException(nameof(worldInstant), "Resource time cannot move backwards.");
@@ -209,7 +210,8 @@ public sealed class ResourceDeposit : AggregateRoot
         if (RegenerationPerWorldHour > 0m && Quantity < Capacity)
         {
             var elapsedHours = (decimal)(instant - LastRegeneratedAtUtc).TotalHours;
-            Quantity = Math.Min(Capacity, Quantity + elapsedHours * RegenerationPerWorldHour);
+            Quantity = Math.Min(Capacity,
+                Quantity + elapsedHours * RegenerationPerWorldHour * availabilityMultiplier);
         }
         LastRegeneratedAtUtc = instant;
         if (Quantity != previous) UpdatedAtUtc = instant;

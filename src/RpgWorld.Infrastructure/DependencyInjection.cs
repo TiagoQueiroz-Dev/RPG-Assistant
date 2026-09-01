@@ -30,6 +30,7 @@ using RpgWorld.Infrastructure.Worlds.Visibility;
 using RpgWorld.Application.Worlds.Content;
 using RpgWorld.Infrastructure.Worlds.Content;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using RpgWorld.Infrastructure.Worlds;
 
 namespace RpgWorld.Infrastructure;
 
@@ -103,6 +104,11 @@ public static class DependencyInjection
         services.AddScoped<CustomContentService>();
         services.AddScoped<ICustomContentService>(provider => provider.GetRequiredService<CustomContentService>());
         services.AddScoped<ICampaignContentCatalogProvider>(provider => provider.GetRequiredService<CustomContentService>());
+        services.AddScoped<CampaignSimulationSettingsService>();
+        services.AddScoped<ICampaignSimulationSettingsService>(provider =>
+            provider.GetRequiredService<CampaignSimulationSettingsService>());
+        services.AddScoped<ICampaignSimulationSettingsProvider>(provider =>
+            provider.GetRequiredService<CampaignSimulationSettingsService>());
         services.AddScoped<IDomainEventHandler<ActorCreatedEvent>, PlayerVisibilityCreatedEventHandler>();
         services.AddScoped<IDomainEventHandler<ActorMovedEvent>, PlayerVisibilityMovedEventHandler>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();

@@ -1,4 +1,5 @@
 using RpgWorld.Application.Worlds.Resources;
+using RpgWorld.Application.Worlds;
 using RpgWorld.Domain.Actors;
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Domain.Worlds.Definitions;
@@ -36,6 +37,27 @@ public sealed class NaturalResourceRegenerationSystemTests
         Assert.Equal(1, repository.SaveCount);
     }
 
+    [Fact]
+    public async Task Resource_scarcity_reduces_real_regeneration_rate()
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var definitions = new WorldDefinitionCatalog(
+            [new TerrainDefinition("woodland", "Woodland", 1m, true, false)],
+            [new BiomeDefinition("forest", "Forest", "woodland", -10m, 40m, 0m, 1m)],
+            [new ResourceDefinition("wood", "Wood", "wood", 10m, 2m)]);
+        var world = World.Create("Scarce", 8, 8);
+        var tile = world.CreateTile(world.PositionAt(1, 1), "forest", definitions, 0, 20m, 0.5m);
+        var deposit = ResourceDeposit.SpawnOnTile(world, tile, definitions.ResolveResource("wood"), now, initialQuantity: 0m);
+        var system = new NaturalResourceRegenerationSystem(
+            new FakeNaturalResourceRepository(world, tile, deposit), new FixedSettingsProvider(resourceScarcity: 2m));
+        var instant = now.AddHours(3);
+
+        await system.ExecuteAsync(new SimulationTickContext(world.Id,
+            new WorldClockSnapshot(world.Id, instant, TimeSpan.FromHours(1), 1m, instant)));
+
+        Assert.Equal(3m, deposit.Quantity);
+    }
+
     private sealed class FakeNaturalResourceRepository(
         World world,
         Tile tile,
@@ -55,5 +77,13 @@ public sealed class NaturalResourceRegenerationSystemTests
             SaveCount++;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FixedSettingsProvider(decimal resourceScarcity) : ICampaignSimulationSettingsProvider
+    {
+        public Task<CampaignSimulationSettingsView> GetEffectiveAsync(
+            Guid worldId, CancellationToken cancellationToken = default) => Task.FromResult(
+            new CampaignSimulationSettingsView(worldId, 1m, 1m, 1m, 1m, resourceScarcity,
+                1m, 1m, 1m, 1, DateTimeOffset.UnixEpoch));
     }
 }

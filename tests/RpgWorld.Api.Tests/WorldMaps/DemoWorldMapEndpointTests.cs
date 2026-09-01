@@ -17,6 +17,7 @@ using RpgWorld.Application.Worlds.Admin;
 using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Modules.Abstractions;
 using RpgWorld.Application.Worlds.Content;
+using RpgWorld.Application.Worlds;
 using RpgWorld.Domain.Worlds.Content;
 
 namespace RpgWorld.Api.Tests.WorldMaps;
@@ -110,6 +111,12 @@ public sealed class DemoWorldMapEndpointTests
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/custom-content"),
             JsonRequest(HttpMethod.Post, $"/api/worlds/{worldId}/custom-content",
                 new { kind = "Creature", code = "secret", name = "Secret", payload = new { maximumHealth = 10 } }),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/simulation/settings"),
+            JsonRequest(HttpMethod.Put, $"/api/worlds/{worldId}/simulation/settings", new
+            {
+                npcDensity = 1, creatureSpawnRate = 1, warFrequency = 1, economicDifficulty = 1,
+                resourceScarcity = 1, migrationRate = 1, populationGrowth = 1, simulationSpeed = 1
+            }),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/actors?x=0&y=0"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/cities"),
             new HttpRequestMessage(HttpMethod.Get, $"/api/worlds/{worldId}/factions"),
@@ -243,6 +250,31 @@ public sealed class DemoWorldMapEndpointTests
     }
 
     [Fact]
+    public async Task Game_master_can_read_and_update_effective_campaign_simulation_settings()
+    {
+        using var factory = new MapWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var worldId = Guid.NewGuid();
+        client.DefaultRequestHeaders.Add("X-Test-Game-Master-World", worldId.ToString());
+
+        var defaults = await client.GetFromJsonAsync<CampaignSimulationSettingsView>(
+            $"/api/worlds/{worldId}/simulation/settings");
+        using var response = await client.PutAsJsonAsync($"/api/worlds/{worldId}/simulation/settings", new
+        {
+            npcDensity = 0.5m, creatureSpawnRate = 2m, warFrequency = 3m, economicDifficulty = 1.5m,
+            resourceScarcity = 2m, migrationRate = 0.8m, populationGrowth = 1.2m, simulationSpeed = 4m
+        });
+
+        response.EnsureSuccessStatusCode();
+        var updated = await response.Content.ReadFromJsonAsync<CampaignSimulationSettingsView>();
+        Assert.Equal((1m, 1m), (defaults!.NPCDensity, defaults.SimulationSpeed));
+        Assert.Equal((0.5m, 2m, 4m), (updated!.NPCDensity, updated.ResourceScarcity, updated.SimulationSpeed));
+        var recorded = factory.Services.GetRequiredService<RecordingCampaignSimulationSettingsService>();
+        Assert.Equal(worldId, recorded.WorldId);
+        Assert.Equal(3m, recorded.Request?.WarFrequency);
+    }
+
+    [Fact]
     public async Task Player_cannot_change_actor_identifier_to_read_another_player_view()
     {
         using var factory = new MapWebApplicationFactory();
@@ -341,6 +373,13 @@ public sealed class DemoWorldMapEndpointTests
                 services.AddSingleton<RecordingCustomContentService>();
                 services.AddSingleton<ICustomContentService>(provider =>
                     provider.GetRequiredService<RecordingCustomContentService>());
+                services.RemoveAll<ICampaignSimulationSettingsService>();
+                services.RemoveAll<ICampaignSimulationSettingsProvider>();
+                services.AddSingleton<RecordingCampaignSimulationSettingsService>();
+                services.AddSingleton<ICampaignSimulationSettingsService>(provider =>
+                    provider.GetRequiredService<RecordingCampaignSimulationSettingsService>());
+                services.AddSingleton<ICampaignSimulationSettingsProvider>(provider =>
+                    provider.GetRequiredService<RecordingCampaignSimulationSettingsService>());
             });
         }
     }
@@ -515,5 +554,29 @@ public sealed class DemoWorldMapEndpointTests
             Task.FromResult(new CustomContentExport(1, worldId, DateTimeOffset.UnixEpoch, []));
         public Task<IRpgContentCatalog> ResolveCatalogAsync(Guid worldId, CancellationToken cancellationToken = default) =>
             Task.FromResult(catalog);
+    }
+
+    private sealed class RecordingCampaignSimulationSettingsService : ICampaignSimulationSettingsService
+    {
+        public Guid? WorldId { get; private set; }
+        public UpdateCampaignSimulationSettings? Request { get; private set; }
+
+        public Task<CampaignSimulationSettingsView> GetEffectiveAsync(
+            Guid worldId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(View(worldId, new UpdateCampaignSimulationSettings(1m, 1m, 1m, 1m, 1m, 1m, 1m, 1m), 1));
+
+        public Task<CampaignSimulationSettingsView> UpdateAsync(
+            Guid worldId, UpdateCampaignSimulationSettings settings, CancellationToken cancellationToken = default)
+        {
+            WorldId = worldId;
+            Request = settings;
+            return Task.FromResult(View(worldId, settings, 2));
+        }
+
+        private static CampaignSimulationSettingsView View(
+            Guid worldId, UpdateCampaignSimulationSettings settings, int version) =>
+            new(worldId, settings.NPCDensity, settings.CreatureSpawnRate, settings.WarFrequency,
+                settings.EconomicDifficulty, settings.ResourceScarcity, settings.MigrationRate,
+                settings.PopulationGrowth, settings.SimulationSpeed, version, DateTimeOffset.UnixEpoch);
     }
 }

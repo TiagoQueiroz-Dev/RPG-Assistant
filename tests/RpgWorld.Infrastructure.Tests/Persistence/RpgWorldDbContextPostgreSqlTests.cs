@@ -31,6 +31,7 @@ using RpgWorld.Simulation.Actors.Housing;
 using RpgWorld.Simulation.Engine;
 using RpgWorld.Simulation.Time;
 using RpgWorld.Application.Worlds.Resources;
+using RpgWorld.Application.Worlds;
 using RpgWorld.Domain.Worlds.Resources;
 using RpgWorld.Simulation.Worlds.Resources;
 using RpgWorld.Application.Worlds.Cities;
@@ -53,6 +54,7 @@ using RpgWorld.Domain.Worlds.Content;
 using RpgWorld.Infrastructure.Worlds.Content;
 using RpgWorld.Modules.Abstractions;
 using RpgWorld.Modules.Default;
+using RpgWorld.Infrastructure.Worlds;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -1405,6 +1407,42 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal("story.omen", storyEvent.Type);
         Assert.Equal(8, publisher.Messages.Count);
         Assert.All(publisher.Messages, value => Assert.Equal("game-master-command", value.UpdateType));
+    }
+
+    [Fact]
+    public async Task Campaign_simulation_settings_persist_audit_and_update_world_speed()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString()).Options;
+        var now = new DateTimeOffset(2038, 1, 2, 3, 0, 0, TimeSpan.Zero);
+        Guid worldId;
+        await using (var context = new RpgWorldDbContext(options))
+        {
+            await context.Database.MigrateAsync();
+            var world = World.Create("Configured campaign", 8, 8);
+            context.Worlds.Add(world);
+            await context.SaveChangesAsync();
+            var service = new CampaignSimulationSettingsService(context, new FixedTimeProvider(now));
+
+            var defaults = await service.GetEffectiveAsync(world.Id);
+            var updated = await service.UpdateAsync(world.Id, new UpdateCampaignSimulationSettings(
+                0.5m, 2m, 3m, 1.5m, 2m, 0.8m, 1.2m, 4m));
+
+            Assert.Equal((1m, 1m, 1m), (defaults.NPCDensity, defaults.ResourceScarcity, defaults.SimulationSpeed));
+            Assert.Equal((0.5m, 2m, 4m), (updated.NPCDensity, updated.ResourceScarcity, updated.SimulationSpeed));
+            Assert.Equal(4m, (await context.WorldClocks.SingleAsync(value => value.WorldId == world.Id)).RealTimeMultiplier);
+            Assert.Contains(await context.WorldEvents.Where(value => value.WorldId == world.Id).ToArrayAsync(),
+                value => value.Type == "campaign.settings.changed" && value.Payload.Contains("ResourceScarcity"));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.UpdateAsync(world.Id,
+                new UpdateCampaignSimulationSettings(0m, 1m, 1m, 1m, 1m, 1m, 1m, 1m)));
+            worldId = world.Id;
+        }
+
+        await using var restarted = new RpgWorldDbContext(options);
+        var restored = await new CampaignSimulationSettingsService(restarted,
+            new FixedTimeProvider(now.AddMinutes(1))).GetEffectiveAsync(worldId);
+        Assert.Equal((0.5m, 2m, 4m), (restored.NPCDensity, restored.ResourceScarcity, restored.SimulationSpeed));
+        Assert.Equal(2, restored.Version);
     }
 
     [Fact]
