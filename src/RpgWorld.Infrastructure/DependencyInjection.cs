@@ -70,6 +70,7 @@ public static class DependencyInjection
         services.AddScoped<IRegionSimulationRepository, EfRegionSimulationRepository>();
         services.AddScoped<IActorRepository, EfActorRepository>();
         services.AddScoped<IActorMovementStore, EfActorMovementStore>();
+        services.AddScoped<IPathfindingMapStore, EfPathfindingMapStore>();
         services.AddScoped<INpcNeedsRepository, EfNpcNeedsRepository>();
         services.AddScoped<RpgWorld.Application.Actors.Actions.INpcActionExecutionStore, EfNpcActionExecutionStore>();
         services.AddScoped<INpcInspectorService, NpcInspectorService>();

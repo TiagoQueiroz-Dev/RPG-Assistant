@@ -50,6 +50,7 @@ public static class DependencyInjection
         services.AddScoped<IRegionSimulationService, RegionSimulationService>();
         services.AddSingleton<IActorMovementPolicy, AdjacentTileMovementPolicy>();
         services.AddScoped<IActorMovementService, ActorMovementService>();
+        services.AddScoped<IActorPathfinder, AStarActorPathfinder>();
         services.AddScoped<ISimulationSystem, NpcNeedsSimulationSystem>();
         var effectiveUtilityAiOptions = utilityAiOptions ?? new UtilityAiOptions();
         effectiveUtilityAiOptions.Validate();

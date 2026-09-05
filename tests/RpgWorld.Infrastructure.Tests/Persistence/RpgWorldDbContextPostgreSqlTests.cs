@@ -1192,7 +1192,11 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         services.AddLogging();
         services.AddSingleton<IConfiguration>(configuration);
         services.AddSingleton<TimeProvider>(time);
-        services.AddSingleton<IWorldDefinitionCatalog>(DefaultWorldDefinitions.Catalog);
+        var moduleCatalog = new RpgModuleCatalog([new DefaultRpgModule()]);
+        var content = moduleCatalog.Load(["rpgworld.default"]);
+        services.AddSingleton<IRpgModuleCatalog>(moduleCatalog);
+        services.AddSingleton<IRpgContentCatalog>(content);
+        services.AddSingleton<IWorldDefinitionCatalog>(content);
         services.AddInfrastructure(configuration);
         services.AddSimulation();
         await using var provider = services.BuildServiceProvider();
@@ -1270,6 +1274,12 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
             .Select(tile => tile.CityId).Distinct());
         Assert.Equal(8, gameMasterTiles.Count(tile => tile.HasResource));
         Assert.Equal(4, playerTiles.Count(tile => tile.HasResource));
+        var pathfinder = readScope.ServiceProvider.GetRequiredService<IActorPathfinder>();
+        var traveler = npcs.First(npc => npc.ResidentCityId == cities[0].Id);
+        var route = await pathfinder.FindAsync(traveler, new Position(first.WorldId, 50, 16));
+        Assert.Equal(ActorPathStatus.Found, route.Status);
+        Assert.Equal(new Position(first.WorldId, 50, 16), route.Steps[^1]);
+        Assert.True(route.Steps.Count > 20);
     }
 
     [Fact]
