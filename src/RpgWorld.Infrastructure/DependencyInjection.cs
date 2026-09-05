@@ -31,6 +31,7 @@ using RpgWorld.Application.Worlds.Content;
 using RpgWorld.Infrastructure.Worlds.Content;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RpgWorld.Infrastructure.Worlds;
+using RpgWorld.Infrastructure.Worlds.Seeding;
 
 namespace RpgWorld.Infrastructure;
 
@@ -109,6 +110,7 @@ public static class DependencyInjection
             provider.GetRequiredService<CampaignSimulationSettingsService>());
         services.AddScoped<ICampaignSimulationSettingsProvider>(provider =>
             provider.GetRequiredService<CampaignSimulationSettingsService>());
+        services.AddScoped<ReferenceScenarioSeeder>();
         services.AddScoped<IDomainEventHandler<ActorCreatedEvent>, PlayerVisibilityCreatedEventHandler>();
         services.AddScoped<IDomainEventHandler<ActorMovedEvent>, PlayerVisibilityMovedEventHandler>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();

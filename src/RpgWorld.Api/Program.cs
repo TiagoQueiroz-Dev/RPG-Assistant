@@ -29,6 +29,9 @@ using RpgWorld.Application.Worlds.Content;
 using RpgWorld.Domain.Worlds.Content;
 using RpgWorld.Application.Worlds;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using RpgWorld.Infrastructure.Persistence;
+using RpgWorld.Infrastructure.Worlds.Seeding;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -107,6 +110,17 @@ builder.Services.Configure<FormOptions>(options =>
 });
 
 var app = builder.Build();
+
+if (args.Contains("--seed-reference-scenario", StringComparer.OrdinalIgnoreCase))
+{
+    var seed = ParseReferenceScenarioSeed(args);
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<RpgWorldDbContext>();
+    await dbContext.Database.MigrateAsync();
+    var result = await scope.ServiceProvider.GetRequiredService<ReferenceScenarioSeeder>().SeedAsync(seed);
+    Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+    return;
+}
 
 app.UseCors("Frontend");
 
@@ -941,6 +955,16 @@ static async Task<IResult> ImportWorldAsync(
     {
         return Results.BadRequest(new { error = exception.Message });
     }
+}
+
+static int ParseReferenceScenarioSeed(string[] arguments)
+{
+    const string prefix = "--scenario-seed=";
+    var value = arguments.FirstOrDefault(argument => argument.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    if (value is null) return ReferenceScenarioSeeder.DefaultSeed;
+    return int.TryParse(value[prefix.Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var seed)
+        ? seed
+        : throw new ArgumentException("Reference scenario seed must be a 32-bit integer.");
 }
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)

@@ -55,6 +55,11 @@ using RpgWorld.Infrastructure.Worlds.Content;
 using RpgWorld.Modules.Abstractions;
 using RpgWorld.Modules.Default;
 using RpgWorld.Infrastructure.Worlds;
+using RpgWorld.Infrastructure.Worlds.Seeding;
+using RpgWorld.Infrastructure;
+using RpgWorld.Simulation;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -1166,6 +1171,102 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal((10m, 0m), (first.OperatingStock, first.FinalStock));
         Assert.Equal((2m, 8m), (first.OperatingPrice, first.FinalPrice));
         Assert.Equal((76m, 71m), (first.OperatingSatisfaction, first.FinalSatisfaction));
+    }
+
+    [Theory]
+    [InlineData(49_777)]
+    [InlineData(int.MinValue)]
+    [InlineData(int.MaxValue)]
+    public async Task Reference_scenario_is_idempotent_complete_simulatable_and_profile_aware(int seed)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:RpgWorld"] = _postgres.GetConnectionString(),
+            ["Redis:Enabled"] = "false"
+        }).Build();
+        var time = new FixedTimeProvider(DateTimeOffset.UnixEpoch.AddHours(1));
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddSingleton<TimeProvider>(time);
+        services.AddSingleton<IWorldDefinitionCatalog>(DefaultWorldDefinitions.Catalog);
+        services.AddInfrastructure(configuration);
+        services.AddSimulation();
+        await using var provider = services.BuildServiceProvider();
+
+        ReferenceScenarioResult first;
+        ReferenceScenarioResult second;
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<RpgWorldDbContext>();
+            await context.Database.MigrateAsync();
+            var seeder = scope.ServiceProvider.GetRequiredService<ReferenceScenarioSeeder>();
+            first = await seeder.SeedAsync(seed);
+            second = await seeder.SeedAsync(seed);
+        }
+
+        Assert.True(first.Created);
+        Assert.False(second.Created);
+        Assert.Equal(first.WorldId, second.WorldId);
+        Assert.Equal(first.WorldId, first.GameMasterWorldId);
+        Assert.Equal(first.WorldId, first.PlayerWorldId);
+        Assert.Equal((64, 32), (first.MapWidth, first.MapHeight));
+        Assert.Equal((2, 100, 2, 8),
+            (first.CityCount, first.NpcCount, first.FactionCount, first.ResourceDepositCount));
+        Assert.True(first.SimulationRunning);
+
+        var engine = provider.GetServices<IHostedService>().OfType<SimulationEngine>().Single();
+        await engine.RunCycleAsync();
+
+        await using var readScope = provider.CreateAsyncScope();
+        var readContext = readScope.ServiceProvider.GetRequiredService<RpgWorldDbContext>();
+        var cities = await readContext.Cities.AsNoTracking()
+            .Where(city => city.WorldId == first.WorldId).OrderBy(city => city.Name).ToArrayAsync();
+        var npcs = await readContext.Actors.AsNoTracking().OfType<NpcActor>()
+            .Where(actor => actor.WorldId == first.WorldId).ToArrayAsync();
+        var factions = await readContext.Factions.AsNoTracking()
+            .Where(faction => faction.WorldId == first.WorldId).ToArrayAsync();
+        var deposits = await readContext.ResourceDeposits.AsNoTracking()
+            .Where(deposit => deposit.WorldId == first.WorldId).ToArrayAsync();
+        Assert.All(cities, city => Assert.Equal(1, city.EconomicCycleCount));
+        Assert.Equal(50, npcs.Count(actor => actor.ResidentCityId == cities[0].Id));
+        Assert.Equal(50, npcs.Count(actor => actor.ResidentCityId == cities[1].Id));
+        Assert.All(npcs, npc =>
+        {
+            Assert.NotNull(npc.Job);
+            Assert.NotNull(npc.FactionId);
+            Assert.NotNull(npc.ResidentCityId);
+        });
+        Assert.All(factions, faction =>
+        {
+            Assert.Equal(50, faction.MemberActorIds.Count);
+            Assert.Single(faction.Relations);
+        });
+        Assert.All(deposits, deposit => Assert.True(deposit.IsDiscovered));
+        var tiles = await readContext.Tiles.AsNoTracking()
+            .Where(tile => tile.WorldId == first.WorldId).ToArrayAsync();
+        Assert.Equal(101, tiles.Sum(tile => tile.OccupantIds.Count));
+        Assert.All(npcs, npc => Assert.Contains(npc.Id,
+            tiles.Single(tile => tile.X == npc.X && tile.Y == npc.Y).OccupantIds));
+        Assert.All(tiles.Where(tile => tile.Y == 16), tile =>
+            Assert.True(DefaultWorldDefinitions.Catalog.ResolveTerrain(tile.TerrainCode).IsTraversable));
+
+        var gameMasterMap = await new PersistedWorldMapProvider(readContext).GetMapAsync(first.WorldId);
+        var playerMap = await new PlayerWorldMapProvider(
+            readContext, new PlayerVisibilityService(readContext, time))
+            .GetMapAsync(first.WorldId, first.PlayerActorId);
+        Assert.NotNull(gameMasterMap);
+        Assert.NotNull(playerMap);
+        var gameMasterTiles = gameMasterMap.Chunks.SelectMany(chunk => chunk.Tiles).ToArray();
+        var playerTiles = playerMap.Chunks.SelectMany(chunk => chunk.Tiles).ToArray();
+        Assert.Equal(64 * 32, gameMasterTiles.Length);
+        Assert.Equal(7 * 7, playerTiles.Length);
+        Assert.Equal(2, gameMasterTiles.Where(tile => tile.CityId.HasValue)
+            .Select(tile => tile.CityId).Distinct().Count());
+        Assert.Single(playerTiles.Where(tile => tile.CityId.HasValue)
+            .Select(tile => tile.CityId).Distinct());
+        Assert.Equal(8, gameMasterTiles.Count(tile => tile.HasResource));
+        Assert.Equal(4, playerTiles.Count(tile => tile.HasResource));
     }
 
     [Fact]
