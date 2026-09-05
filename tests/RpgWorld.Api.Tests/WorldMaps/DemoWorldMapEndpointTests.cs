@@ -20,11 +20,42 @@ using RpgWorld.Modules.Abstractions;
 using RpgWorld.Application.Worlds.Content;
 using RpgWorld.Application.Worlds;
 using RpgWorld.Domain.Worlds.Content;
+using RpgWorld.Application.Campaigns;
+using System.Text.Json;
 
 namespace RpgWorld.Api.Tests.WorldMaps;
 
 public sealed class DemoWorldMapEndpointTests
 {
+    [Fact]
+    public async Task Campaign_endpoints_require_the_matching_master_and_return_metadata()
+    {
+        using var factory = new MapWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var worldId = Guid.NewGuid();
+        var path = $"/api/worlds/{worldId}/campaigns";
+        var request = new { name = "Session", moduleId = "rpgworld.default", settings = new { language = "pt-BR" } };
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync(path, request)).StatusCode);
+        client.DefaultRequestHeaders.Add("X-Test-Game-Master-World", Guid.NewGuid().ToString());
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(path)).StatusCode);
+        client.DefaultRequestHeaders.Remove("X-Test-Game-Master-World");
+        client.DefaultRequestHeaders.Add("X-Test-Game-Master-World", worldId.ToString());
+        using var response = await client.PostAsJsonAsync(path, request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var campaign = (await response.Content.ReadFromJsonAsync<CampaignView>())!;
+        Assert.Equal(worldId, campaign.WorldId);
+        Assert.Equal("pt-BR", campaign.Settings.GetProperty("language").GetString());
+        Assert.Equal($"{path}/{campaign.Id}", response.Headers.Location!.ToString());
+        Assert.Equal(campaign.Id, (await client.GetFromJsonAsync<CampaignView>($"{path}/{campaign.Id}"))!.Id);
+        Assert.Single((await client.GetFromJsonAsync<CampaignView[]>(path))!);
+        using var end = await client.PostAsync($"{path}/{campaign.Id}/end", null);
+        Assert.Equal("Ended", (await end.Content.ReadFromJsonAsync<CampaignView>())!.Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"{path}/{Guid.NewGuid()}")).StatusCode);
+        client.DefaultRequestHeaders.Remove("X-Test-Game-Master-World");
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync($"{path}/{campaign.Id}/end", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"{path}/{campaign.Id}")).StatusCode);
+    }
+
     [Fact]
     public void Runtime_uses_unified_module_catalog_through_engine_abstractions()
     {
@@ -391,6 +422,8 @@ public sealed class DemoWorldMapEndpointTests
                 services.AddSingleton<ICustomContentService>(provider =>
                     provider.GetRequiredService<RecordingCustomContentService>());
                 services.RemoveAll<ICampaignSimulationSettingsService>();
+                services.RemoveAll<ICampaignService>();
+                services.AddSingleton<ICampaignService, RecordingCampaignService>();
                 services.RemoveAll<ICampaignSimulationSettingsProvider>();
                 services.AddSingleton<RecordingCampaignSimulationSettingsService>();
                 services.AddSingleton<ICampaignSimulationSettingsService>(provider =>
@@ -419,6 +452,34 @@ public sealed class DemoWorldMapEndpointTests
             });
             next(app);
         };
+    }
+
+    private sealed class RecordingCampaignService : ICampaignService
+    {
+        private CampaignView? _campaign;
+
+        public Task<CampaignView> CreateAsync(Guid worldId, CreateCampaignRequest request, CancellationToken cancellationToken = default)
+        {
+            using var settings = JsonDocument.Parse(request.SettingsJson);
+            _campaign = new(Guid.NewGuid(), worldId, request.Name, request.ModuleId, settings.RootElement.Clone(),
+                "Active", DateTimeOffset.UnixEpoch, null);
+            return Task.FromResult(_campaign);
+        }
+
+        public Task<CampaignView> GetAsync(Guid worldId, Guid campaignId, CancellationToken cancellationToken = default) =>
+            _campaign is { } campaign && campaign.WorldId == worldId && campaign.Id == campaignId
+                ? Task.FromResult(campaign) : throw new KeyNotFoundException();
+
+        public Task<IReadOnlyList<CampaignView>> ListAsync(Guid worldId, int offset = 0, int limit = 50,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<CampaignView>>(_campaign is { } campaign && campaign.WorldId == worldId ? [campaign] : []);
+
+        public async Task<CampaignView> EndAsync(Guid worldId, Guid campaignId, CancellationToken cancellationToken = default)
+        {
+            _campaign = (await GetAsync(worldId, campaignId, cancellationToken)) with
+                { Status = "Ended", EndedAtUtc = DateTimeOffset.UnixEpoch.AddHours(1) };
+            return _campaign;
+        }
     }
 
     private sealed class RecordingTimeCommandService : IWorldTimeCommandService

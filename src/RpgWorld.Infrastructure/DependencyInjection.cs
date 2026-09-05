@@ -111,6 +111,7 @@ public static class DependencyInjection
         services.AddScoped<ICampaignSimulationSettingsProvider>(provider =>
             provider.GetRequiredService<CampaignSimulationSettingsService>());
         services.AddScoped<ReferenceScenarioSeeder>();
+        services.AddScoped<RpgWorld.Application.Campaigns.ICampaignService, RpgWorld.Infrastructure.Campaigns.CampaignService>();
         services.AddScoped<IDomainEventHandler<ActorCreatedEvent>, PlayerVisibilityCreatedEventHandler>();
         services.AddScoped<IDomainEventHandler<ActorMovedEvent>, PlayerVisibilityMovedEventHandler>();
         var effectiveNpcMemoryOptions = npcMemoryOptions ?? new NpcMemoryOptions();

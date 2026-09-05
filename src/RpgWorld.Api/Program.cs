@@ -32,6 +32,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using RpgWorld.Infrastructure.Persistence;
 using RpgWorld.Infrastructure.Worlds.Seeding;
+using RpgWorld.Api.Campaigns;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -123,6 +124,7 @@ if (args.Contains("--seed-reference-scenario", StringComparer.OrdinalIgnoreCase)
 }
 
 app.UseCors("Frontend");
+app.MapCampaignEndpoints();
 
 app.MapHub<WorldHub>("/hubs/world", options =>
 {

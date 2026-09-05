@@ -1270,6 +1270,44 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Campaigns_validate_references_persist_settings_and_end_independently_of_world()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString()).Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var world = World.Create("Campaign world", 8, 8, 4);
+        context.Worlds.Add(world);
+        await context.SaveChangesAsync();
+        var modules = new RpgModuleCatalog([new DefaultRpgModule()]);
+        var time = new FixedTimeProvider(DateTimeOffset.UnixEpoch);
+        var service = new RpgWorld.Infrastructure.Campaigns.CampaignService(context, modules, time);
+        var request = new RpgWorld.Application.Campaigns.CreateCampaignRequest(
+            "Evening campaign", "rpgworld.default", "{\"language\":\"pt-BR\",\"privateNotes\":true}");
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.CreateAsync(Guid.NewGuid(), request));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.CreateAsync(world.Id, request with { ModuleId = "missing" }));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.CreateAsync(world.Id, request with { SettingsJson = "[]" }));
+        var first = await service.CreateAsync(world.Id, request);
+        var second = await service.CreateAsync(world.Id, request with { Name = "Second game", SettingsJson = "{}" });
+        context.ChangeTracker.Clear();
+        var loaded = await service.GetAsync(world.Id, first.Id);
+        Assert.Equal("pt-BR", loaded.Settings.GetProperty("language").GetString());
+        Assert.Equal("rpgworld.default", loaded.ModuleId);
+        Assert.Empty(context.ChangeTracker.Entries());
+        Assert.Equal(2, (await service.ListAsync(world.Id)).Count);
+        Assert.Single(await service.ListAsync(world.Id, limit: 1));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(Guid.NewGuid(), first.Id));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.EndAsync(Guid.NewGuid(), first.Id));
+        var ended = await service.EndAsync(world.Id, first.Id);
+        Assert.Equal("Ended", ended.Status);
+        context.ChangeTracker.Clear();
+        Assert.Equal(ended.EndedAtUtc, (await service.EndAsync(world.Id, first.Id)).EndedAtUtc);
+        Assert.Equal("Active", (await service.GetAsync(world.Id, second.Id)).Status);
+        Assert.True((await context.Worlds.AsNoTracking().SingleAsync()).IsSimulationRunning);
+        Assert.Equal(2, await context.Campaigns.CountAsync());
+    }
+
+    [Fact]
     public async Task World_admin_inspector_uses_global_summaries_and_filtered_paged_entity_queries()
     {
         var options = new DbContextOptionsBuilder<RpgWorldDbContext>()

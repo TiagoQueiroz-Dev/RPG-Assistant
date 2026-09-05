@@ -34,6 +34,7 @@ public sealed class RpgWorldDbContext : DbContext
         Set<PersistenceCheckpoint>();
 
     public DbSet<World> Worlds => Set<World>();
+    public DbSet<RpgWorld.Domain.Campaigns.Campaign> Campaigns => Set<RpgWorld.Domain.Campaigns.Campaign>();
 
     public DbSet<Chunk> Chunks => Set<Chunk>();
 
