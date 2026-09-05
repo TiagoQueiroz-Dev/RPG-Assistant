@@ -139,6 +139,8 @@ public interface INpcUtilityDecisionService
 public interface INpcDecisionContextProvider
 {
     NpcDecisionContext Create(NpcActor npc, IReadOnlyList<NpcMemory>? memories = null);
+    Task<NpcDecisionContext> CreateAsync(NpcActor npc, IReadOnlyList<NpcMemory>? memories = null,
+        CancellationToken cancellationToken = default) => Task.FromResult(Create(npc, memories));
 }
 
 public interface INpcUtilityScoreModifier

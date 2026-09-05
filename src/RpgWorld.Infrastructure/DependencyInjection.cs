@@ -77,6 +77,8 @@ public static class DependencyInjection
         services.AddScoped<RpgWorld.Application.Actors.Actions.INpcActionExecutionStore, EfNpcActionExecutionStore>();
         services.AddScoped<RpgWorld.Application.Actors.Actions.INpcTravelDestinationResolver,
             RpgWorld.Infrastructure.Actors.NpcTravelDestinationResolver>();
+        services.AddScoped<RpgWorld.Application.Actors.Actions.INpcDailyActivityStore,
+            RpgWorld.Infrastructure.Actors.NpcDailyActivityStore>();
         services.AddScoped<INpcInspectorService, NpcInspectorService>();
         services.AddScoped<INpcMemoryRepository, EfNpcMemoryRepository>();
         services.AddScoped<IActorRelationshipService, ActorRelationshipService>();

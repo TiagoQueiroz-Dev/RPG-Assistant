@@ -62,7 +62,7 @@ public static class DependencyInjection
         services.AddSingleton<NpcAction, WorkNpcAction>();
         services.AddSingleton<NpcAction, TravelNpcAction>();
         services.AddSingleton<NpcAction, AttackEnemyNpcAction>();
-        services.AddSingleton<INpcDecisionContextProvider, DefaultNpcDecisionContextProvider>();
+        services.AddScoped<INpcDecisionContextProvider, DefaultNpcDecisionContextProvider>();
         services.TryAddSingleton<ITraitDefinitionCatalog>(new TraitDefinitionCatalog([]));
         services.AddSingleton<INpcUtilityScoreModifier, TraitUtilityScoreModifier>();
         services.AddSingleton<INpcUtilityScoreModifier, MemoryUtilityScoreModifier>();
@@ -72,6 +72,10 @@ public static class DependencyInjection
         services.AddScoped<ISimulationSystem, NpcUtilityAiSimulationSystem>();
         services.AddSingleton<RpgWorld.Simulation.Actors.Actions.NpcActionExecutionDiagnostics>();
         services.AddScoped<RpgWorld.Simulation.Actors.Actions.INpcActionExecutor, RpgWorld.Simulation.Actors.Actions.TravelNpcActionExecutor>();
+        services.AddScoped<RpgWorld.Simulation.Actors.Actions.NpcActionNavigation>();
+        services.AddScoped<RpgWorld.Simulation.Actors.Actions.INpcActionExecutor, RpgWorld.Simulation.Actors.Actions.EatNpcActionExecutor>();
+        services.AddScoped<RpgWorld.Simulation.Actors.Actions.INpcActionExecutor, RpgWorld.Simulation.Actors.Actions.SleepNpcActionExecutor>();
+        services.AddScoped<RpgWorld.Simulation.Actors.Actions.INpcActionExecutor, RpgWorld.Simulation.Actors.Actions.WorkNpcActionExecutor>();
         services.AddScoped<ISimulationSystem, RpgWorld.Simulation.Actors.Actions.NpcActionExecutionSimulationSystem>();
         services.AddScoped<ISimulationSystem, NpcMemoryRetentionSimulationSystem>();
         services.AddScoped<ISimulationSystem, NaturalResourceRegenerationSystem>();

@@ -3,8 +3,18 @@ using RpgWorld.Domain.Actors.Memories;
 
 namespace RpgWorld.Simulation.Actors.Utility;
 
-public sealed class DefaultNpcDecisionContextProvider(UtilityAiOptions options) : INpcDecisionContextProvider
+public sealed class DefaultNpcDecisionContextProvider(UtilityAiOptions options,
+    RpgWorld.Application.Actors.Actions.INpcDailyActivityStore? activities = null) : INpcDecisionContextProvider
 {
+    public async Task<NpcDecisionContext> CreateAsync(NpcActor npc, IReadOnlyList<NpcMemory>? memories = null,
+        CancellationToken cancellationToken = default)
+    {
+        var context = Create(npc, memories);
+        if (activities is null || context.FoodAvailability > 0m || npc.Hunger <= 0m ||
+            await activities.FindFoodAsync(npc, cancellationToken) is null) return context;
+        return new(npc, 1m, context.Safety, context.TravelOpportunity, context.EnemyPresent, context.EnemyThreat, memories);
+    }
+
     public NpcDecisionContext Create(NpcActor npc, IReadOnlyList<NpcMemory>? memories = null)
     {
         ArgumentNullException.ThrowIfNull(npc);

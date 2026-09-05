@@ -64,8 +64,11 @@ public sealed class NpcUtilityAiSimulationSystem : ISimulationSystem
         var changed = false;
         foreach (var npc in npcs)
         {
+            // A repeated world tick must not restart an action already executed at this instant.
+            if (npc.ActionExecution?.LastProcessedAt is { } processed && processed >= context.Clock.CurrentInstant)
+                continue;
             var memories = memoriesByActor.GetValueOrDefault(npc.Id) ?? [];
-            var decision = _decisionService.Decide(_contextProvider.Create(npc, memories));
+            var decision = _decisionService.Decide(await _contextProvider.CreateAsync(npc, memories, cancellationToken));
             var explanation = decision?.Explain() ?? "No eligible NPC action was available.";
             _diagnostics.Record(new NpcDecisionDiagnostic(
                 context.WorldId,

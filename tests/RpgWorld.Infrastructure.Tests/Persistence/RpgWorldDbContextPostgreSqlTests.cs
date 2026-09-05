@@ -68,7 +68,7 @@ using RpgWorld.Simulation.Actors.Utility;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
-public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
+public sealed partial class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
 {
     private static readonly WorldDefinitionCatalog TestDefinitions = new(
         [new TerrainDefinition("plains", "Plains", 1m, true, false)],
