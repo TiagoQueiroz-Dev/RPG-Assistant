@@ -32,3 +32,17 @@ saves; the pipeline then records a terminal result in a fresh transaction and co
 rolls back and propagates without terminating the action, so the tick can be retried. Missing executors fail explicitly.
 Executors should emit domain events through the persisted aggregates and leave delivery to the realtime infrastructure.
 The latest execution outcome is available from `NpcActionExecutionDiagnostics` and structured logs.
+
+## Travel
+
+Travel resolves a saved target position, a travel goal's city/actor target, or the NPC's home. A missing destination is an
+explicit failure. The resolved destination is saved with the execution. Each tick reconstructs the route from current map
+state and advances exactly one adjacent step through `ActorMovementService`; terrain changes therefore cause recalculation.
+A search limit triggers one wider bounded search and then leaves the action running for a later tick. Only arrival completes
+the action; an unreachable route fails it. A completed travel goal is removed.
+
+The simulation movement entry point uses the world gate already held by the engine and receives simulation time. HTTP
+movement continues to acquire the gate itself. Actor position, tile occupancy, and action progress commit together under
+the database retry strategy. Domain event delivery, chunk-cache updates, and movement messages are deferred until commit;
+rollback discards them. A delivery failure after commit is logged without replaying the movement. This in-process delivery
+queue is not a durable outbox: reconnect/resynchronization remains necessary if the process stops after committing.

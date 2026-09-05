@@ -63,6 +63,8 @@ using Microsoft.Extensions.Hosting;
 using RpgWorld.Simulation.Actors.Actions;
 using RpgWorld.Domain.Actors.Actions;
 using Microsoft.Extensions.Logging.Abstractions;
+using RpgWorld.Simulation.Actors;
+using RpgWorld.Simulation.Actors.Utility;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -1197,6 +1199,7 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         services.AddSingleton<IRpgModuleCatalog>(moduleCatalog);
         services.AddSingleton<IRpgContentCatalog>(content);
         services.AddSingleton<IWorldDefinitionCatalog>(content);
+        services.AddSingleton<IWorldUpdatePublisher, RecordingWorldUpdatePublisher>();
         services.AddInfrastructure(configuration);
         services.AddSimulation();
         await using var provider = services.BuildServiceProvider();
@@ -1452,6 +1455,149 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal(0, resumed!.InventoryQuantity("output"));
         Assert.Equal(NpcActionStatus.Running, resumed.ActionExecution!.Status);
         Assert.True(resumed.ActionExecution.CanProcess(tick.Clock.CurrentInstant));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Travel_is_chosen_autonomously_and_walks_across_chunks_with_route_recalculation(bool blockRoute)
+    {
+        var time = new TravelTimeProvider();
+        var publisher = new RecordingWorldUpdatePublisher();
+        await using var provider = CreateTravelProvider(time, publisher);
+        var (worldId, npcId, playerId) = await SeedTravelAsync(provider);
+        var engine = provider.GetServices<IHostedService>().OfType<SimulationEngine>().Single();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var positions = new List<Position> { new(worldId, 1, 1) };
+        var committedPositions = new List<Position>();
+        publisher.OnGameMaster = async message =>
+        {
+            if (message.UpdateType != "actor.moved") return;
+            await using var scope = provider.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<RpgWorldDbContext>();
+            var actor = await db.Actors.AsNoTracking().SingleAsync(value => value.Id == npcId);
+            committedPositions.Add(actor.Position);
+        };
+        Guid? executionId = null;
+        for (var tick = 0; tick < 12; tick++)
+        {
+            time.Advance();
+            await engine.RunCycleAsync(timeout.Token);
+            await using var scope = provider.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<RpgWorldDbContext>();
+            var npc = await db.Actors.AsNoTracking().OfType<NpcActor>().SingleAsync(value => value.Id == npcId);
+            executionId ??= npc.ActionExecution!.Id;
+            Assert.Equal(executionId, npc.ActionExecution!.Id);
+            Assert.Equal("Travel", npc.ActionExecution.ActionCode);
+            Assert.True(npc.ActionExecution.Status is NpcActionStatus.Running or NpcActionStatus.Completed,
+                npc.ActionExecution.Reason);
+            Assert.Equal(new Position(worldId, 6, 1), npc.ActionExecution.Target!.Position);
+            positions.Add(npc.Position);
+            if (npc.ActionExecution.Status == NpcActionStatus.Completed) break;
+            Assert.Equal(NpcActionStatus.Running, npc.ActionExecution.Status);
+            if (tick == 0 && blockRoute)
+            {
+                var obstacle = await db.Tiles.SingleAsync(tile => tile.WorldId == worldId && tile.X == 3 && tile.Y == 1);
+                obstacle.SetEnvironment("river", DefaultWorldDefinitions.Catalog, 0, 20m, 0.8m);
+                await db.SaveChangesAsync();
+            }
+        }
+        Assert.Equal(new Position(worldId, 6, 1), positions[^1]);
+        Assert.True(positions.Count > 3);
+        if (blockRoute) Assert.DoesNotContain(new Position(worldId, 3, 1), positions);
+        for (var index = 1; index < positions.Count; index++)
+        {
+            Assert.NotEqual(positions[index - 1], positions[index]);
+            Assert.InRange(Math.Abs(positions[index].X - positions[index - 1].X), 0, 1);
+            Assert.InRange(Math.Abs(positions[index].Y - positions[index - 1].Y), 0, 1);
+        }
+        var moves = publisher.Messages.Where(message => message.UpdateType == "actor.moved").ToArray();
+        Assert.Equal(positions.Count - 1, moves.Length);
+        Assert.Equal(positions.Skip(1), committedPositions);
+        Assert.All(moves, message => Assert.True(message.OccurredAtUtc < DateTimeOffset.UnixEpoch.AddMinutes(1)));
+        var decision = provider.GetRequiredService<INpcDecisionDiagnostics>().GetLatest(npcId);
+        Assert.Equal("Travel", decision!.Decision!.ActionCode);
+        await using var finalScope = provider.CreateAsyncScope();
+        var finalDb = finalScope.ServiceProvider.GetRequiredService<RpgWorldDbContext>();
+        var player = await finalDb.Actors.AsNoTracking().SingleAsync(value => value.Id == playerId);
+        Assert.Equal(new Position(worldId, 0, 3), player.Position);
+        var finalTile = await finalDb.Tiles.AsNoTracking().SingleAsync(tile => tile.WorldId == worldId && tile.X == 6 && tile.Y == 1);
+        Assert.Contains(npcId, finalTile.OccupantIds);
+        Assert.Equal(1, (await finalDb.Tiles.AsNoTracking().Where(tile => tile.WorldId == worldId).ToArrayAsync())
+            .Count(tile => tile.OccupantIds.Contains(npcId)));
+    }
+
+    [Fact]
+    public async Task Rolled_back_movement_does_not_publish_or_change_persisted_position()
+    {
+        var time = new TravelTimeProvider();
+        var publisher = new RecordingWorldUpdatePublisher();
+        await using var provider = CreateTravelProvider(time, publisher);
+        var (worldId, npcId, _) = await SeedTravelAsync(provider);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<RpgWorld.Application.Actors.Actions.INpcActionExecutionStore>();
+        var movement = scope.ServiceProvider.GetRequiredService<ISimulationActorMovementService>();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.ExecuteAtomicallyAsync(async token =>
+        {
+            await movement.MoveDuringTickAsync(new(npcId, 2, 1), worldId, DateTimeOffset.UnixEpoch.AddSeconds(1), token);
+            Assert.Empty(publisher.Messages);
+            throw new InvalidOperationException("Abort tick.");
+        }));
+        Assert.Empty(publisher.Messages);
+        var npc = await store.GetAsync(worldId, npcId);
+        Assert.Equal(new Position(worldId, 1, 1), npc!.Position);
+    }
+
+    private ServiceProvider CreateTravelProvider(TravelTimeProvider time, RecordingWorldUpdatePublisher publisher)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:RpgWorld"] = _postgres.GetConnectionString(), ["Redis:Enabled"] = "false"
+        }).Build();
+        var modules = new RpgModuleCatalog([new DefaultRpgModule()]);
+        var content = modules.Load(["rpgworld.default"]);
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddSingleton<TimeProvider>(time);
+        services.AddSingleton<IRpgModuleCatalog>(modules);
+        services.AddSingleton<IRpgContentCatalog>(content);
+        services.AddSingleton<IWorldDefinitionCatalog>(content);
+        services.AddSingleton<ISimulationRandom>(new SeededSimulationRandom(56));
+        services.AddInfrastructure(configuration);
+        services.AddSimulation();
+        services.AddSingleton<IWorldUpdatePublisher>(publisher);
+        return services.BuildServiceProvider();
+    }
+
+    private static async Task<(Guid WorldId, Guid NpcId, Guid PlayerId)> SeedTravelAsync(ServiceProvider provider)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<RpgWorldDbContext>();
+        await db.Database.MigrateAsync();
+        var world = World.Create("Autonomous travel", 8, 4, 4);
+        var npc = NpcActor.Create("Traveler", world, world.PositionAt(1, 1), DateTimeOffset.UnixEpoch);
+        npc.SetHome(world, world.PositionAt(6, 1), DateTimeOffset.UnixEpoch);
+        var player = PlayerActor.Create("Observer", world, world.PositionAt(0, 3), DateTimeOffset.UnixEpoch);
+        db.AddRange(world, npc, player, WorldClock.Create(world.Id, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch));
+        for (var x = 0; x < 2; x++) db.Chunks.Add(world.CreateChunk(new(x, 0)));
+        for (var y = 0; y < 4; y++)
+        for (var x = 0; x < 8; x++)
+        {
+            var tile = world.CreateTile(world.PositionAt(x, y), "grassland", DefaultWorldDefinitions.Catalog, 0, 20m, 0.5m);
+            if (npc.Position == tile.Position) tile.AddOccupant(npc.Id);
+            if (player.Position == tile.Position) tile.AddOccupant(player.Id);
+            db.Tiles.Add(tile);
+        }
+        await db.SaveChangesAsync();
+        return (world.Id, npc.Id, player.Id);
+    }
+
+    private sealed class TravelTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _now = DateTimeOffset.UnixEpoch;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance() => _now = _now.AddSeconds(1);
     }
 
     private sealed class TestNpcActionExecutor(
@@ -2047,6 +2193,7 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
     private sealed class RecordingWorldUpdatePublisher : IWorldUpdatePublisher
     {
         public List<WorldUpdateMessage> Messages { get; } = [];
+        public Func<WorldUpdateMessage, Task>? OnGameMaster { get; set; }
 
         public Task PublishToWorldAsync(WorldUpdateMessage message, CancellationToken cancellationToken = default)
         {
@@ -2060,10 +2207,10 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         public Task PublishToPlayerAsync(Guid playerId, WorldUpdateMessage message, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
 
-        public Task PublishToGameMasterAsync(WorldUpdateMessage message, CancellationToken cancellationToken = default)
+        public async Task PublishToGameMasterAsync(WorldUpdateMessage message, CancellationToken cancellationToken = default)
         {
             Messages.Add(message);
-            return Task.CompletedTask;
+            if (OnGameMaster is not null) await OnGameMaster(message);
         }
     }
 }

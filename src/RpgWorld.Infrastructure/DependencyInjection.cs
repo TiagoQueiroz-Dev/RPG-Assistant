@@ -60,6 +60,8 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString, PostgresOptions.Configure);
         });
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+        services.AddScoped<WorldEffectQueue>();
+        services.AddScoped<IWorldEffectQueue>(provider => provider.GetRequiredService<WorldEffectQueue>());
         services.AddScoped<IWorldMapRepository, EfWorldMapRepository>();
         services.AddScoped<IWorldImportService, WorldImportService>();
         services.AddSingleton<IMapRegionClassifier, ColorMapRegionClassifier>();
@@ -73,6 +75,8 @@ public static class DependencyInjection
         services.AddScoped<IPathfindingMapStore, EfPathfindingMapStore>();
         services.AddScoped<INpcNeedsRepository, EfNpcNeedsRepository>();
         services.AddScoped<RpgWorld.Application.Actors.Actions.INpcActionExecutionStore, EfNpcActionExecutionStore>();
+        services.AddScoped<RpgWorld.Application.Actors.Actions.INpcTravelDestinationResolver,
+            RpgWorld.Infrastructure.Actors.NpcTravelDestinationResolver>();
         services.AddScoped<INpcInspectorService, NpcInspectorService>();
         services.AddScoped<INpcMemoryRepository, EfNpcMemoryRepository>();
         services.AddScoped<IActorRelationshipService, ActorRelationshipService>();

@@ -22,11 +22,15 @@ public sealed class RpgWorldDbContext : DbContext
 
     public RpgWorldDbContext(
         DbContextOptions<RpgWorldDbContext> options,
-        IDomainEventDispatcher? domainEventDispatcher = null)
+        IDomainEventDispatcher? domainEventDispatcher = null,
+        WorldEffectQueue? effects = null)
         : base(options)
     {
         _domainEventDispatcher = domainEventDispatcher;
+        Effects = effects ?? new WorldEffectQueue();
     }
+
+    public WorldEffectQueue Effects { get; }
 
     public const string DefaultSchema = "rpg_world";
 
@@ -148,7 +152,7 @@ public sealed class RpgWorldDbContext : DbContext
         }
 
         if (_domainEventDispatcher is not null)
-            await _domainEventDispatcher.DispatchAsync(pending.Events, cancellationToken);
+            await Effects.RunAfterCommitAsync(token => _domainEventDispatcher.DispatchAsync(pending.Events, token), cancellationToken);
     }
 
     private void AddWorldEvents(IEnumerable<IDomainEvent> domainEvents)

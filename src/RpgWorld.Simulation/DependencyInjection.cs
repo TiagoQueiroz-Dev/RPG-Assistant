@@ -49,7 +49,9 @@ public static class DependencyInjection
         services.AddScoped<IWorldSimulationControlService, WorldSimulationControlService>();
         services.AddScoped<IRegionSimulationService, RegionSimulationService>();
         services.AddSingleton<IActorMovementPolicy, AdjacentTileMovementPolicy>();
-        services.AddScoped<IActorMovementService, ActorMovementService>();
+        services.AddScoped<ActorMovementService>();
+        services.AddScoped<IActorMovementService>(provider => provider.GetRequiredService<ActorMovementService>());
+        services.AddScoped<ISimulationActorMovementService>(provider => provider.GetRequiredService<ActorMovementService>());
         services.AddScoped<IActorPathfinder, AStarActorPathfinder>();
         services.AddScoped<ISimulationSystem, NpcNeedsSimulationSystem>();
         var effectiveUtilityAiOptions = utilityAiOptions ?? new UtilityAiOptions();
@@ -69,6 +71,7 @@ public static class DependencyInjection
         services.AddSingleton<INpcDecisionDiagnostics, NpcDecisionDiagnostics>();
         services.AddScoped<ISimulationSystem, NpcUtilityAiSimulationSystem>();
         services.AddSingleton<RpgWorld.Simulation.Actors.Actions.NpcActionExecutionDiagnostics>();
+        services.AddScoped<RpgWorld.Simulation.Actors.Actions.INpcActionExecutor, RpgWorld.Simulation.Actors.Actions.TravelNpcActionExecutor>();
         services.AddScoped<ISimulationSystem, RpgWorld.Simulation.Actors.Actions.NpcActionExecutionSimulationSystem>();
         services.AddScoped<ISimulationSystem, NpcMemoryRetentionSimulationSystem>();
         services.AddScoped<ISimulationSystem, NaturalResourceRegenerationSystem>();

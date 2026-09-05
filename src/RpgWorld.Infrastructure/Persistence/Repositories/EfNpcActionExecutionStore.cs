@@ -20,17 +20,22 @@ public sealed class EfNpcActionExecutionStore(RpgWorldDbContext dbContext) : INp
 
     public async Task ExecuteAtomicallyAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
+        await dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-            await action(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-        }
-        catch
-        {
-            try { await transaction.RollbackAsync(CancellationToken.None); }
-            finally { dbContext.ChangeTracker.Clear(); }
-            throw;
-        }
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            dbContext.Effects.Begin();
+            try
+            {
+                await action(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                try { await transaction.RollbackAsync(CancellationToken.None); }
+                finally { dbContext.ChangeTracker.Clear(); dbContext.Effects.Discard(); }
+                throw;
+            }
+        });
+        await dbContext.Effects.FlushAsync();
     }
 }

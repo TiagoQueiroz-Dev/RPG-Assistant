@@ -6,6 +6,7 @@ using RpgWorld.Domain.Worlds.Definitions;
 using RpgWorld.Simulation.Chunks;
 using RpgWorld.Simulation.Engine;
 using RpgWorld.Application.Worlds.Content;
+using RpgWorld.Application.Events;
 
 namespace RpgWorld.Simulation.Actors;
 
@@ -17,7 +18,8 @@ public sealed class ActorMovementService(
     IWorldCommandGate commandGate,
     IWorldUpdatePublisher publisher,
     TimeProvider timeProvider,
-    ICampaignContentCatalogProvider? campaignContent = null) : IActorMovementService
+    ICampaignContentCatalogProvider? campaignContent = null,
+    IWorldEffectQueue? effects = null) : IActorMovementService, ISimulationActorMovementService
 {
     public async Task<ActorMoveResult> MoveAsync(
         ActorMoveRequest request,
@@ -27,13 +29,15 @@ public sealed class ActorMovementService(
         if (request.ActorId == Guid.Empty) throw new ArgumentException("Actor is required.", nameof(request));
         var worldId = await store.FindActorWorldIdAsync(request.ActorId, cancellationToken)
             ?? throw new KeyNotFoundException("Actor was not found.");
-        return await commandGate.ExecuteAsync(worldId, token => MoveInsideGateAsync(request, worldId, token), cancellationToken);
+        return await commandGate.ExecuteAsync(worldId,
+            token => MoveDuringTickAsync(request, worldId, timeProvider.GetUtcNow(), token), cancellationToken);
     }
 
-    private async Task<ActorMoveResult> MoveInsideGateAsync(
+    public async Task<ActorMoveResult> MoveDuringTickAsync(
         ActorMoveRequest request,
         Guid worldId,
-        CancellationToken cancellationToken)
+        DateTimeOffset instant,
+        CancellationToken cancellationToken = default)
     {
         var actor = await store.GetActorAsync(request.ActorId, cancellationToken)
             ?? throw new KeyNotFoundException("Actor was not found.");
@@ -57,17 +61,11 @@ public sealed class ActorMovementService(
             ? originChunk
             : await store.GetChunkAsync(worldId, destinationCoordinate, cancellationToken)
                 ?? throw new InvalidOperationException("Actor destination chunk was not found.");
-        var occurredAt = timeProvider.GetUtcNow();
+        var occurredAt = instant;
         actor.Move(world, destination, occurredAt);
         originTile.RemoveOccupant(actor.Id);
         destinationTile.AddOccupant(actor.Id);
         await store.SaveChangesAsync(cancellationToken);
-        await chunkActivationService.ApplyActorMovementAsync(
-            worldId,
-            actor.Id,
-            origin,
-            destination,
-            cancellationToken);
 
         var result = new ActorMoveResult(
             actor.Id,
@@ -92,12 +90,18 @@ public sealed class ActorMovementService(
                 ["destinationY"] = destination.Y.ToString(CultureInfo.InvariantCulture),
                 ["movementCost"] = evaluation.MovementCost.ToString(CultureInfo.InvariantCulture)
             });
-        await publisher.PublishToChunkAsync(originChunk.Id, message, cancellationToken);
-        if (destinationChunk.Id != originChunk.Id)
-            await publisher.PublishToChunkAsync(destinationChunk.Id, message, cancellationToken);
-        if (string.Equals(actor.Kind, "player", StringComparison.Ordinal))
-            await publisher.PublishToPlayerAsync(actor.Id, message, cancellationToken);
-        await publisher.PublishToGameMasterAsync(message, cancellationToken);
+        async Task PublishAsync(CancellationToken token)
+        {
+            await chunkActivationService.ApplyActorMovementAsync(worldId, actor.Id, origin, destination, token);
+            await publisher.PublishToChunkAsync(originChunk.Id, message, token);
+            if (destinationChunk.Id != originChunk.Id)
+                await publisher.PublishToChunkAsync(destinationChunk.Id, message, token);
+            if (string.Equals(actor.Kind, "player", StringComparison.Ordinal))
+                await publisher.PublishToPlayerAsync(actor.Id, message, token);
+            await publisher.PublishToGameMasterAsync(message, token);
+        }
+        if (effects is null) await PublishAsync(cancellationToken);
+        else await effects.RunAfterCommitAsync(PublishAsync, cancellationToken);
         return result;
     }
 }
