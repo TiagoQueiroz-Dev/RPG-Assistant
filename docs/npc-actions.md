@@ -18,3 +18,17 @@ the executor must explicitly finish it after validating the objective.
 
 Lifecycle events record start, replacement cancellation, and terminal results in the World Event Log. Detailed progress
 is available on the action snapshot without growing the persistent timeline for every tick.
+
+## Execution pipeline
+
+`NpcActionExecutionSimulationSystem` runs after Utility AI (order 35) at the movement cadence. Register an
+`INpcActionExecutor` per action code through dependency injection. The executor receives the NPC, immutable execution
+snapshot, simulation instant, and elapsed simulation time, and returns Continue, Complete, Fail, or Cancel.
+The pipeline owns progression and terminal transitions; executors apply the action's world effects and may resolve targets.
+The decision layer remains responsible only for selecting an action.
+
+Each NPC step runs in its own database transaction. Exceptions, Fail, and Cancel roll back its changes, including early
+saves; the pipeline then records a terminal result in a fresh transaction and continues the other NPCs. Host cancellation
+rolls back and propagates without terminating the action, so the tick can be retried. Missing executors fail explicitly.
+Executors should emit domain events through the persisted aggregates and leave delivery to the realtime infrastructure.
+The latest execution outcome is available from `NpcActionExecutionDiagnostics` and structured logs.

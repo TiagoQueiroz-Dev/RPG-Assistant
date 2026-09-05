@@ -67,6 +67,8 @@ public static class DependencyInjection
         services.AddSingleton<INpcUtilityDecisionService, NpcUtilityDecisionService>();
         services.AddSingleton<INpcDecisionDiagnostics, NpcDecisionDiagnostics>();
         services.AddScoped<ISimulationSystem, NpcUtilityAiSimulationSystem>();
+        services.AddSingleton<RpgWorld.Simulation.Actors.Actions.NpcActionExecutionDiagnostics>();
+        services.AddScoped<ISimulationSystem, RpgWorld.Simulation.Actors.Actions.NpcActionExecutionSimulationSystem>();
         services.AddScoped<ISimulationSystem, NpcMemoryRetentionSimulationSystem>();
         services.AddScoped<ISimulationSystem, NaturalResourceRegenerationSystem>();
         var economyOptions = cityEconomyOptions ?? CityEconomyOptions.CreateDefault();

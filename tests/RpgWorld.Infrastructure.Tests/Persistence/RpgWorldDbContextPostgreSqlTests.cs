@@ -60,6 +60,9 @@ using RpgWorld.Infrastructure;
 using RpgWorld.Simulation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using RpgWorld.Simulation.Actors.Actions;
+using RpgWorld.Domain.Actors.Actions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RpgWorld.Infrastructure.Tests.Persistence;
 
@@ -1347,6 +1350,106 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
         Assert.Equal(1m, finished.ActionExecution.Progress);
         Assert.Null(finished.CurrentAction);
         Assert.Equal(2, await read.WorldEvents.CountAsync(value => value.Type == "NpcActionExecutionChanged"));
+    }
+
+    [Fact]
+    public async Task Action_pipeline_rolls_back_failures_continues_other_npcs_and_completes_over_multiple_ticks()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString()).Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var instant = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Execution pipeline", 16, 16);
+        var actors = new[] { "throws", "worker", "cancels", "fails", "unregistered" }
+            .Select(name => NpcActor.Create(name, world, world.PositionAt(1, 1), instant)).ToArray();
+        foreach (var npc in actors) npc.SelectAction(npc.Name == "unregistered" ? "unknown" : "test.action", instant);
+        context.Add(world);
+        context.AddRange(actors);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var store = new EfNpcActionExecutionStore(context);
+        var executor = new TestNpcActionExecutor(async (step, token) =>
+        {
+            step.Actor.AddInventory("output", 1, step.Instant);
+            step.Actor.Earn(10m, step.Instant);
+            await store.SaveChangesAsync(token); // Even an early save must roll back on failure.
+            return step.Actor.Name switch
+            {
+                "throws" => throw new InvalidOperationException("Simulated executor failure."),
+                "cancels" => new(NpcActionStepOutcome.Cancel, Reason: "Target changed."),
+                "fails" => new(NpcActionStepOutcome.Fail, Reason: "Missing resource."),
+                _ => new(step.Execution.Progress == 0m ? NpcActionStepOutcome.Continue : NpcActionStepOutcome.Complete, 0.5m)
+            };
+        });
+        var diagnostics = new NpcActionExecutionDiagnostics();
+        var system = new NpcActionExecutionSimulationSystem(store, [executor], diagnostics,
+            NullLogger<NpcActionExecutionSimulationSystem>.Instance);
+        SimulationTickContext Tick(int minute) => new(world.Id, new WorldClockSnapshot(world.Id,
+            instant.AddMinutes(minute), TimeSpan.FromMinutes(1), 1m, instant.AddMinutes(minute)));
+
+        await system.ExecuteAsync(Tick(1));
+        await system.ExecuteAsync(Tick(1));
+        context.ChangeTracker.Clear();
+        var halfway = await context.Actors.OfType<NpcActor>().SingleAsync(npc => npc.Name == "worker");
+        Assert.Equal((NpcActionStatus.Running, 0.5m, 1),
+            (halfway.ActionExecution!.Status, halfway.ActionExecution.Progress, halfway.InventoryQuantity("output")));
+        await system.ExecuteAsync(Tick(2));
+        context.ChangeTracker.Clear();
+        var final = await context.Actors.AsNoTracking().OfType<NpcActor>().ToArrayAsync();
+        foreach (var npc in final)
+        {
+            Assert.Equal(npc.Name == "worker" ? 2 : 0, npc.InventoryQuantity("output"));
+            Assert.Equal(npc.Name == "worker" ? 20m : 0m, npc.Money);
+            Assert.Equal(npc.Name switch { "worker" => NpcActionStatus.Completed, "cancels" => NpcActionStatus.Cancelled,
+                _ => NpcActionStatus.Failed }, npc.ActionExecution!.Status);
+            Assert.Null(npc.CurrentAction);
+            Assert.NotNull(diagnostics.GetLatest(npc.Id));
+        }
+        Assert.Equal(NpcActionStepOutcome.Complete, diagnostics.GetLatest(halfway.Id)!.Outcome);
+        Assert.Contains("No executor registered", final.Single(npc => npc.Name == "unregistered").ActionExecution!.Reason);
+    }
+
+    [Fact]
+    public async Task Cancelling_pipeline_rolls_back_the_tick_and_leaves_action_resumable()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString()).Options;
+        await using var context = new RpgWorldDbContext(options);
+        await context.Database.MigrateAsync();
+        var instant = DateTimeOffset.UnixEpoch;
+        var world = World.Create("Cancelled tick", 8, 8);
+        var npc = NpcActor.Create("Worker", world, world.PositionAt(1, 1), instant);
+        npc.SelectAction("test.action", instant);
+        context.AddRange(world, npc);
+        await context.SaveChangesAsync();
+        var store = new EfNpcActionExecutionStore(context);
+        using var cancellation = new CancellationTokenSource();
+        var executor = new TestNpcActionExecutor(async (step, token) =>
+        {
+            step.Actor.AddInventory("output", 1, step.Instant);
+            await store.SaveChangesAsync(token);
+            cancellation.Cancel();
+            token.ThrowIfCancellationRequested();
+            return new(NpcActionStepOutcome.Complete);
+        });
+        var system = new NpcActionExecutionSimulationSystem(store, [executor], new NpcActionExecutionDiagnostics(),
+            NullLogger<NpcActionExecutionSimulationSystem>.Instance);
+        var tick = new SimulationTickContext(world.Id, new WorldClockSnapshot(world.Id,
+            instant.AddMinutes(1), TimeSpan.FromMinutes(1), 1m, instant));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => system.ExecuteAsync(tick, cancellation.Token));
+        var resumed = await store.GetAsync(world.Id, npc.Id);
+        Assert.Equal(0, resumed!.InventoryQuantity("output"));
+        Assert.Equal(NpcActionStatus.Running, resumed.ActionExecution!.Status);
+        Assert.True(resumed.ActionExecution.CanProcess(tick.Clock.CurrentInstant));
+    }
+
+    private sealed class TestNpcActionExecutor(
+        Func<NpcActionExecutionContext, CancellationToken, Task<NpcActionStepResult>> execute) : INpcActionExecutor
+    {
+        public string ActionCode => "test.action";
+        public Task<NpcActionStepResult> ExecuteAsync(NpcActionExecutionContext context, CancellationToken cancellationToken = default) =>
+            execute(context, cancellationToken);
     }
 
     [Fact]
