@@ -37,6 +37,8 @@ public sealed class NpcUtilityAiSimulationSystemTests
         await system.ExecuteAsync(context);
 
         Assert.Equal(NpcActionCodes.Eat, npc.CurrentAction);
+        Assert.Equal(NpcActionCodes.Eat, npc.ActionExecution!.ActionCode);
+        Assert.Equal(instant, npc.ActionExecution.StartedAt);
         Assert.Equal(1, repository.SaveCalls);
         var diagnostic = Assert.IsType<NpcDecisionDiagnostic>(diagnostics.GetLatest(npc.Id));
         Assert.Equal(NpcActionCodes.Eat, diagnostic.Decision?.ActionCode);

@@ -60,7 +60,7 @@ public sealed class ActorTests
         Assert.Equal(ActorStatus.Dead, actor.Status);
         Assert.Null(actor.CurrentAction);
         Assert.Collection(
-            actor.DomainEvents,
+            actor.DomainEvents.Where(value => value is not NpcActionExecutionChangedEvent),
             domainEvent => Assert.IsType<ActorMovedEvent>(domainEvent),
             domainEvent => Assert.IsType<ActorDamagedEvent>(domainEvent),
             domainEvent => Assert.IsType<ActorKilledEvent>(domainEvent));

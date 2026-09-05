@@ -21,6 +21,9 @@ internal sealed class NpcActorConfiguration : IEntityTypeConfiguration<NpcActor>
         ActorConfiguration.ConfigureJson(builder.Property<List<Guid>>("_familyIds"), "family_ids");
         ActorConfiguration.ConfigureJson(builder.Property<List<NpcGoal>>("_goals"), "goals");
         ActorConfiguration.ConfigureJson(builder.Property<List<string>>("_traitCodes"), "trait_codes");
+        ActorConfiguration.ConfigureJson(
+            builder.Property<RpgWorld.Domain.Actors.Actions.NpcActionExecution>(nameof(NpcActor.ActionExecution)),
+            "action_execution");
         builder.Ignore(npc => npc.Home);
         builder.Ignore(npc => npc.FamilyIds);
         builder.Ignore(npc => npc.Goals);

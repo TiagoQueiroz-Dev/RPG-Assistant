@@ -14,6 +14,9 @@ internal static class WorldEventPolicy
         ArgumentNullException.ThrowIfNull(domainEvent);
         var metadata = domainEvent switch
         {
+            NpcActionExecutionChangedEvent value when value.Execution.Status != RpgWorld.Domain.Actors.Actions.NpcActionStatus.Running ||
+                value.IsStarting =>
+                new Metadata(value.WorldId, new WorldEventPosition(value.Position.X, value.Position.Y), [value.ActorId]),
             ActorKilledEvent value => new Metadata(value.WorldId, null, Actors(value.ActorId, value.KillerId)),
             CityCreatedEvent value => new Metadata(value.WorldId, null, []),
             CityCrisisEvent value => new Metadata(value.WorldId, null, []),

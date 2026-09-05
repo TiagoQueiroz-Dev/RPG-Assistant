@@ -1308,6 +1308,48 @@ public sealed class RpgWorldDbContextPostgreSqlTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Npc_action_execution_resumes_after_reload_without_another_decision()
+    {
+        var options = new DbContextOptionsBuilder<RpgWorldDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString()).Options;
+        var instant = DateTimeOffset.UnixEpoch;
+        Guid npcId;
+        Guid executionId;
+        RpgWorld.Domain.Actors.Actions.NpcActionTarget target;
+        await using (var context = new RpgWorldDbContext(options))
+        {
+            await context.Database.MigrateAsync();
+            var world = World.Create("Actions", 16, 16);
+            var npc = NpcActor.Create("Traveler", world, world.PositionAt(1, 1), instant);
+            target = new(world.PositionAt(9, 7), RpgWorld.Domain.Actors.Actions.NpcActionTargetKind.WorldEntity, Guid.NewGuid());
+            npc.SelectAction("Travel", instant, target);
+            npcId = npc.Id;
+            executionId = npc.ActionExecution!.Id;
+            npc.AdvanceAction(executionId, 0.25m, instant.AddMinutes(1));
+            context.AddRange(world, npc);
+            await context.SaveChangesAsync();
+        }
+        await using (var context = new RpgWorldDbContext(options))
+        {
+            var npc = await context.Actors.OfType<NpcActor>().SingleAsync(value => value.Id == npcId);
+            Assert.Equal(target, npc.ActionExecution!.Target);
+            Assert.Equal(executionId, npc.ActionExecution.Id);
+            Assert.Equal(0.25m, npc.ActionExecution.Progress);
+            Assert.Equal("Travel", npc.CurrentAction);
+            Assert.False(npc.ActionExecution.CanProcess(instant.AddMinutes(1)));
+            npc.AdvanceAction(executionId, 0.75m, instant.AddMinutes(2));
+            npc.FinishAction(executionId, RpgWorld.Domain.Actors.Actions.NpcActionStatus.Completed, instant.AddMinutes(3));
+            await context.SaveChangesAsync();
+        }
+        await using var read = new RpgWorldDbContext(options);
+        var finished = await read.Actors.AsNoTracking().OfType<NpcActor>().SingleAsync(value => value.Id == npcId);
+        Assert.Equal(RpgWorld.Domain.Actors.Actions.NpcActionStatus.Completed, finished.ActionExecution!.Status);
+        Assert.Equal(1m, finished.ActionExecution.Progress);
+        Assert.Null(finished.CurrentAction);
+        Assert.Equal(2, await read.WorldEvents.CountAsync(value => value.Type == "NpcActionExecutionChanged"));
+    }
+
+    [Fact]
     public async Task World_admin_inspector_uses_global_summaries_and_filtered_paged_entity_queries()
     {
         var options = new DbContextOptionsBuilder<RpgWorldDbContext>()

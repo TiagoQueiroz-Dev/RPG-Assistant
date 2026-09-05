@@ -64,4 +64,5 @@ public sealed record NpcInspectorView(
     Guid? FactionId,
     IReadOnlyList<NpcTraitInspectorView> Traits,
     IReadOnlyList<NpcMemoryInspectorView> Memories,
-    IReadOnlyList<ActorRelationshipInspectorView> Relationships);
+    IReadOnlyList<ActorRelationshipInspectorView> Relationships,
+    RpgWorld.Domain.Actors.Actions.NpcActionExecution? ActionExecution = null);

@@ -72,7 +72,8 @@ public sealed class NpcInspectorService(
                 relationship.Love,
                 relationship.Hatred,
                 relationship.Trust,
-                relationship.History)).ToArray());
+                relationship.History)).ToArray(),
+            npc.ActionExecution);
     }
 
     private NpcTraitInspectorView ToView(string code) =>

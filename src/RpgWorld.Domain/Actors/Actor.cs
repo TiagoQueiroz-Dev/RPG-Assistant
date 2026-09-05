@@ -80,12 +80,15 @@ public abstract class Actor : AggregateRoot
         Health -= applied;
         Status = Health == 0 ? ActorStatus.Dead : ActorStatus.Active;
         CurrentAction = null;
+        OnActionInterrupted(occurredAtUtc);
         Touch(occurredAtUtc);
         RaiseDomainEvent(new ActorDamagedEvent(Id, sourceActorId, WorldId, applied, Health, occurredAtUtc));
         if (Health == 0) RaiseDomainEvent(new ActorKilledEvent(Id, sourceActorId, WorldId, occurredAtUtc));
     }
 
-    public void SetCurrentAction(string? action, DateTimeOffset occurredAtUtc)
+    protected virtual void OnActionInterrupted(DateTimeOffset occurredAtUtc) { }
+
+    public virtual void SetCurrentAction(string? action, DateTimeOffset occurredAtUtc)
     {
         EnsureAlive();
         if (action is { Length: > 120 }) throw new ArgumentException("Current action is too long.", nameof(action));

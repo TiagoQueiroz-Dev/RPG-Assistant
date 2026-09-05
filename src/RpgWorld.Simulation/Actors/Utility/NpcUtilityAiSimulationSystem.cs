@@ -79,9 +79,7 @@ public sealed class NpcUtilityAiSimulationSystem : ISimulationSystem
                 context.WorldId,
                 explanation);
             var actionCode = decision?.ActionCode;
-            if (string.Equals(npc.CurrentAction, actionCode, StringComparison.Ordinal)) continue;
-            npc.SetCurrentAction(actionCode, context.Clock.CurrentInstant);
-            changed = true;
+            changed |= npc.SelectAction(actionCode, context.Clock.CurrentInstant);
         }
         if (changed) await _repository.SaveChangesAsync(cancellationToken);
     }

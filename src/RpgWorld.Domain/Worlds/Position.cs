@@ -2,6 +2,7 @@ namespace RpgWorld.Domain.Worlds;
 
 public readonly record struct Position
 {
+    [System.Text.Json.Serialization.JsonConstructor]
     public Position(Guid worldId, int x, int y)
     {
         if (worldId == Guid.Empty)
@@ -30,4 +31,3 @@ public readonly record struct Position
 
     public int Y { get; }
 }
-

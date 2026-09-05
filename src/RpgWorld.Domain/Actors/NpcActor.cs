@@ -1,6 +1,8 @@
 using RpgWorld.Domain.Worlds;
 using RpgWorld.Domain.Actors.Traits;
 using RpgWorld.Domain.Worlds.Cities;
+using RpgWorld.Domain.Actors.Actions;
+using RpgWorld.Domain.Events;
 
 namespace RpgWorld.Domain.Actors;
 
@@ -40,6 +42,79 @@ public sealed class NpcActor : Actor
     public IReadOnlyList<Guid> FamilyIds => _familyIds;
     public IReadOnlyList<NpcGoal> Goals => _goals.OrderByDescending(goal => goal.Priority).ToArray();
     public IReadOnlyList<string> TraitCodes => _traitCodes.Order(StringComparer.Ordinal).ToArray();
+    public NpcActionExecution? ActionExecution { get; private set; }
+
+    public override void SetCurrentAction(string? action, DateTimeOffset occurredAtUtc) =>
+        SelectAction(action, occurredAtUtc);
+
+    public bool SelectAction(string? code, DateTimeOffset instant, NpcActionTarget? target = null,
+        NpcActionReplacementPolicy policy = NpcActionReplacementPolicy.ReplaceDifferent)
+    {
+        EnsureAlive();
+        if (!Enum.IsDefined(policy)) throw new ArgumentOutOfRangeException(nameof(policy));
+        if (target?.Position is { } position && position.WorldId != WorldId)
+            throw new ArgumentException("Action target must belong to this world.", nameof(target));
+        var normalized = string.IsNullOrWhiteSpace(code) ? null : code.Trim();
+        if (ActionExecution is { Status: NpcActionStatus.Running } running)
+        {
+            if (instant < running.UpdatedAt) throw new ArgumentOutOfRangeException(nameof(instant));
+            if (policy == NpcActionReplacementPolicy.KeepRunning ||
+                (policy == NpcActionReplacementPolicy.ReplaceDifferent && running.ActionCode == normalized &&
+                 (target is null || target == running.Target))) return false;
+        }
+        // Validate the replacement before cancelling the previous action.
+        var next = normalized is null ? null : NpcActionExecution.Start(normalized, instant, target);
+        var changed = false;
+        if (ActionExecution is { Status: NpcActionStatus.Running } previous)
+        {
+            ApplyExecution(previous.Finish(NpcActionStatus.Cancelled, instant,
+                normalized is null ? "No action selected." : "Replaced by a new decision."));
+            changed = true;
+        }
+        if (next is not null) { ApplyExecution(next); changed = true; }
+        base.SetCurrentAction(normalized, instant);
+        return changed;
+    }
+
+    public void SetActionTarget(Guid executionId, NpcActionTarget target, DateTimeOffset instant)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (target.Position is { } position && position.WorldId != WorldId)
+            throw new ArgumentException("Action target must belong to this world.", nameof(target));
+        ApplyExecution(RequiredExecution(executionId).Retarget(target, instant));
+    }
+
+    public void AdvanceAction(Guid executionId, decimal progress, DateTimeOffset instant) =>
+        ApplyExecution(RequiredExecution(executionId).Advance(progress, instant));
+
+    public void FinishAction(Guid executionId, NpcActionStatus status, DateTimeOffset instant, string? reason = null)
+    {
+        ApplyExecution(RequiredExecution(executionId).Finish(status, instant, reason));
+        base.SetCurrentAction(null, instant);
+    }
+
+    private NpcActionExecution RequiredExecution(Guid id)
+    {
+        EnsureAlive();
+        return ActionExecution is { } execution && execution.Id == id ? execution
+            : throw new InvalidOperationException("Action execution has been replaced or is missing.");
+    }
+
+    private void ApplyExecution(NpcActionExecution execution)
+    {
+        if (execution == ActionExecution) return;
+        var isStarting = ActionExecution?.Id != execution.Id;
+        ActionExecution = execution;
+        Touch(execution.UpdatedAt);
+        RaiseDomainEvent(new NpcActionExecutionChangedEvent(Id, WorldId, Position, execution, isStarting));
+    }
+
+    protected override void OnActionInterrupted(DateTimeOffset occurredAtUtc)
+    {
+        if (ActionExecution is { Status: NpcActionStatus.Running } running)
+            ApplyExecution(running.Finish(NpcActionStatus.Cancelled, occurredAtUtc,
+                Status == ActorStatus.Dead ? "Actor died." : "Interrupted by damage."));
+    }
 
     public static NpcActor Create(string name, World world, Position position, DateTimeOffset createdAtUtc, int maximumHealth = 100) =>
         new(name, world, position, maximumHealth, createdAtUtc);
